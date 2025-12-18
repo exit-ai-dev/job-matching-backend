@@ -13,8 +13,6 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
       - DEBUG=${DEBUG:-True}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    volumes:
-      - ./job_matching.db:/app/job_matching.db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

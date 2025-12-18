@@ -76,6 +76,7 @@ azure-*.ps1
 azure-*.sh
 
 # Other
+.env
 .env.example
 docker-compose.yml
 Dockerfile.dev

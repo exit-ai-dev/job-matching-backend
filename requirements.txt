@@ -21,3 +21,10 @@ email-validator==2.3.0
 
 # Azure Deployment
 gunicorn==23.0.0
+
+# AI/ML (required by app.services.openai_service, app/ml/*, etc.)
+openai==1.59.7
+sentence-transformers==3.3.1
+numpy==2.2.1
+scikit-learn==1.6.0
+torch==2.6.0
