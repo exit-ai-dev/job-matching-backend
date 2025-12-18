@@ -27,6 +27,20 @@ jobs:
           mkdir -p package
           python -m pip install --no-cache-dir -r requirements.txt -t ./package
           python -m pip cache purge
+          # 依存パッケージに含まれるテストなどを削除してパッケージサイズを削減
+          python - <<'PY'
+import shutil
+from pathlib import Path
+
+root = Path("package")
+patterns = ["tests", "testing", "__pycache__"]
+for pattern in patterns:
+    for path in root.rglob(pattern):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        elif path.is_file():
+            path.unlink(missing_ok=True)
+PY
           rsync -av \
             --exclude '.git' \
             --exclude '.github' \
