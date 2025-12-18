@@ -2,19 +2,87 @@
 
 ## 🔴 現在のエラー原因
 
-### 504 Gateway Timeout / 503 Service Unavailable
-**原因**: `requirements.txt`に含まれる重いML/AIパッケージ（torch, sentence-transformers等）がAzureのスタートアップタイムアウト（230秒）内にインストール・起動できない
+### Application Error - 依存関係が見つからない
+**エラーログ**:
+```
+WARNING: Could not find virtual environment directory /home/site/wwwroot/antenv.
+WARNING: Could not find package directory /home/site/wwwroot/__oryx_packages__.
+ModuleNotFoundError: No module named 'uvicorn'
+```
 
-**ファイルサイズ**:
-- torch: 約2GB
-- sentence-transformers: 約500MB
-- 合計: 約3GB以上
+**原因**: Azure Oryxがデプロイ時にPython依存関係をビルドしていない。`SCM_DO_BUILD_DURING_DEPLOYMENT`が無効になっているため、requirements.txtからパッケージがインストールされない。
 
-**起動時間**: 5〜15分（タイムアウト超過）
+**影響**: uvicornを含むすべての依存関係がインストールされないため、アプリケーションが起動できない。
 
 ---
 
-## ✅ 解決方法
+## ✅ 解決方法（最優先）
+
+### クイックフィックス: Oryxビルドを有効化
+
+以下のスクリプトを実行して、Azure Oryxビルドを有効化します。
+
+#### Windows (PowerShell):
+```powershell
+cd C:\Users\Exitotrinity-13\job-matching-backend
+.\azure-enable-build.ps1
+```
+
+#### Linux/Mac:
+```bash
+cd ~/job-matching-backend
+chmod +x azure-enable-build.sh
+./azure-enable-build.sh
+```
+
+#### 手動で設定する場合:
+```bash
+az webapp config appsettings set \
+  --name job-ai-app-affnfdgqbue2euf0 \
+  --resource-group <your-resource-group> \
+  --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true ENABLE_ORYX_BUILD=true
+
+az webapp config set \
+  --name job-ai-app-affnfdgqbue2euf0 \
+  --resource-group <your-resource-group> \
+  --startup-file "python -m uvicorn main:app --host 0.0.0.0 --port \$PORT"
+```
+
+### 設定後の手順:
+1. **GitHub Actions ワークフローを再実行**
+   - GitHubリポジトリ → Actions タブ
+   - 最新のワークフローを選択 → "Re-run jobs"
+
+2. **デプロイログを確認**
+   ```bash
+   az webapp log tail --name job-ai-app-affnfdgqbue2euf0 --resource-group <your-resource-group>
+   ```
+   正常な場合、以下のようなログが表示されます:
+   ```
+   Oryx Build Command: python -m pip install -r requirements.txt
+   Collecting fastapi==0.115.5
+   Installing collected packages: ...
+   Successfully installed fastapi-0.115.5 uvicorn-0.34.0 ...
+   ```
+
+3. **ヘルスチェック**
+   ```bash
+   curl https://job-ai-app-affnfdgqbue2euf0.azurewebsites.net/health
+   # 期待される応答: {"status":"healthy"}
+   ```
+
+---
+
+## 📋 その他の考慮事項
+
+### 以前のエラー: 504 Gateway Timeout / 503 Service Unavailable
+**原因**: `requirements.txt`に含まれる重いML/AIパッケージ（torch, sentence-transformers等）がAzureのスタートアップタイムアウト（230秒）内にインストール・起動できない
+
+**解決済み**: 現在のrequirements.txtは軽量版に置き換え済み（torch等を除外）
+
+---
+
+## 🔧 詳細な設定手順
 
 ### ステップ1: 軽量版requirements.txtを使用
 

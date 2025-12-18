@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.core.exceptions import JobMatchingException
-from app.api.endpoints import matching, conversation, employer, auth, jobs, applications, scouts
+from app.api.endpoints import auth, jobs, applications, scouts
 from app.db.session import healthcheck
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -135,27 +135,6 @@ def create_application() -> FastAPI:
         scouts.router,
         prefix="/api/scouts",
         tags=["scouts"]
-    )
-
-    # AIマッチング
-    app.include_router(
-        matching.router,
-        prefix="/api/matching",
-        tags=["matching"]
-    )
-
-    # 会話型AI
-    app.include_router(
-        conversation.router,
-        prefix="/api/conversation",
-        tags=["conversation"]
-    )
-
-    # 企業向けAPI
-    app.include_router(
-        employer.router,
-        prefix="/api/employers",
-        tags=["employer"]
     )
 
     # ヘルスチェックエンドポイント
