@@ -1,23 +1,18 @@
-# Production Requirements (Lightweight)
-# Core Web Framework
 fastapi==0.115.5
 uvicorn[standard]==0.34.0
 python-dotenv==1.0.1
 pydantic==2.10.3
 pydantic-settings==2.6.1
 python-multipart==0.0.20
-
-# Database
 sqlalchemy==2.0.36
 alembic==1.14.0
-psycopg[binary]==3.2.3
-
-# Authentication
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+psycopg[binary]==3.2.3
 
-# Email Validation
-email-validator==2.3.0
-
-# Azure Deployment
-gunicorn==23.0.0
+# ML/AI packages
+sentence-transformers==3.3.1
+numpy==2.2.1
+scikit-learn==1.6.0
+torch==2.6.0
+openai==1.59.7
