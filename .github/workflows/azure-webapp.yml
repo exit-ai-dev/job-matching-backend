@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.10"
+  AZURE_WEBAPP_NAME: job-ai-app-affnfdgqbue2euf0
 
 jobs:
   build-and-deploy:
@@ -21,44 +23,43 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build artifact (vendor dependencies)
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          mkdir -p package
-          python -m pip install --no-cache-dir -r requirements.txt -t ./package
-          python -m pip cache purge
-          # 依存パッケージに含まれるテストなどを削除してパッケージサイズを削減
-          python - <<'PY'
-import shutil
-from pathlib import Path
+          # 軽量版requirements.txtを使用（ML/AIパッケージを除外）
+          if [ -f requirements.production.txt ]; then
+            pip install -r requirements.production.txt
+          else
+            pip install -r requirements.txt
+          fi
 
-root = Path("package")
-patterns = ["tests", "testing", "__pycache__"]
-for pattern in patterns:
-    for path in root.rglob(pattern):
-        if path.is_dir():
-            shutil.rmtree(path, ignore_errors=True)
-        elif path.is_file():
-            path.unlink(missing_ok=True)
-PY
-          rsync -av \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude '__pycache__' \
-            --exclude '*.pyc' \
-            --exclude '.venv' \
-            --exclude 'venv' \
-            --exclude '.env' \
-            --exclude 'job_matching.db' \
-            --exclude 'release.zip' \
-            --exclude 'package' \
-            ./ ./package/
-          cd package
-          zip -r ../release.zip .
+      - name: Create deployment package
+        run: |
+          # アプリケーションファイルのみをzipに含める
+          zip -r release.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "__pycache__/*" \
+            -x "*.pyc" \
+            -x ".venv/*" \
+            -x "venv/*" \
+            -x ".env" \
+            -x "job_matching.db" \
+            -x "*.db" \
+            -x "data/*" \
+            -x "*.log" \
+            -x "requirements.backup.txt"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
+
+      - name: Health check
+        run: |
+          echo "Waiting for deployment to complete..."
+          sleep 30
+          echo "Checking health endpoint..."
+          curl -f https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health || echo "Health check failed"
