@@ -28,6 +28,9 @@ class LoginRequest(BaseModel):
 class LineLinkRequest(BaseModel):
     """LINE連携リクエスト"""
     lineUserId: str
+    lineDisplayName: str
+    linePictureUrl: Optional[str] = None
+    lineEmail: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -60,6 +63,12 @@ class UserResponse(BaseModel):
     industry: Optional[str] = None
     companySize: Optional[str] = None
     companyDescription: Optional[str] = None
+
+    # LINE連携フィールド
+    lineUserId: Optional[str] = None
+    lineDisplayName: Optional[str] = None
+    linePictureUrl: Optional[str] = None
+    lineEmail: Optional[str] = None
 
     class Config:
         from_attributes = True
