@@ -30,16 +30,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins_list,
     allow_credentials=settings.cors_credentials,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=[
-        "Accept",
-        "Accept-Language",
-        "Content-Type",
-        "Authorization",
-        "Origin",
-        "X-Requested-With",
-    ],
-    expose_headers=["Content-Length", "Content-Type"],
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
 )
 
 # APIルーターを登録

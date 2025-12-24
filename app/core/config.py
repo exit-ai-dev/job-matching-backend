@@ -29,8 +29,19 @@ class Settings(BaseSettings):
         description="Comma separated allowed origins"
     )
     cors_credentials: bool = True
-    cors_methods: List[str] = Field(default=["*"])
-    cors_headers: List[str] = Field(default=["*"])
+    cors_methods: List[str] = Field(
+        default=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    )
+    cors_headers: List[str] = Field(
+        default=[
+            "Accept",
+            "Accept-Language",
+            "Content-Type",
+            "Authorization",
+            "Origin",
+            "X-Requested-With",
+        ]
+    )
 
     # OpenAI API設定
     openai_api_key: str = Field(..., description="OpenAI API Key")
