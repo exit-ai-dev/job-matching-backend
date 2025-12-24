@@ -5,3 +5,7 @@ venv/
 .env.*
 !.env.example
 
+# Windows reserved device names
+nul
+NUL
+
