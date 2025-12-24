@@ -8,16 +8,16 @@ import json
 
 from app.schemas.user import PreferencesRequest, ProfileUpdateRequest
 from app.schemas.auth import UserResponse
-from app.core.dependencies import CurrentUserDep
+from app.core.dependencies import CurrentUser
 from app.db.session import get_db
 
 router = APIRouter()
 
 
-@router.post("/preferences", response_model=UserResponse)
+@router.post("/preferences")
 async def save_preferences(
     request: PreferencesRequest,
-    current_user: CurrentUserDep,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """
@@ -82,10 +82,10 @@ async def save_preferences(
     )
 
 
-@router.put("/profile", response_model=UserResponse)
+@router.put("/profile")
 async def update_profile(
     request: ProfileUpdateRequest,
-    current_user: CurrentUserDep,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """
