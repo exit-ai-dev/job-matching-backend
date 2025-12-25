@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(pip install:*)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\Exitotrinity-13\\\\job-matching-backend\\\\app\\\\api\\\\endpoints'' -File -Filter ''*.py'' | Select-Object -ExpandProperty Name\")",
+      "Bash(powershell:*)",
+      "Bash(del:*)",
+      "Bash(findstr:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git rm:*)"
+    ]
+  }
+}
