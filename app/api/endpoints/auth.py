@@ -14,6 +14,7 @@ from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
     LineLinkRequest,
+    LineRegisterRequest,
     AuthResponse,
     UserResponse,
     TokenResponse,
@@ -264,6 +265,111 @@ async def link_line(
     )
 
     access_token, expires_in = create_access_token(current_user.id)
+
+    token_response = TokenResponse(
+        accessToken=access_token,
+        expiresIn=expires_in
+    )
+
+    return AuthResponse(user=user_response, token=token_response)
+
+
+@router.post("/line/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+async def register_with_line(
+    request: LineRegisterRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    LINE新規登録（LINEアカウントで新規アカウントを作成）
+
+    Args:
+        request: LINE新規登録リクエスト
+        db: データベースセッション
+
+    Returns:
+        認証レスポンス（ユーザー情報とトークン）
+    """
+    # LINE IDの重複チェック
+    existing_line_user = db.query(User).filter(
+        User.line_user_id == request.lineUserId
+    ).first()
+
+    if existing_line_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="このLINEアカウントは既に登録されています。ログインしてください"
+        )
+
+    # メールアドレスがある場合は重複チェック
+    if request.lineEmail:
+        existing_email_user = db.query(User).filter(
+            User.email == request.lineEmail
+        ).first()
+
+        if existing_email_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="このメールアドレスは既に登録されています"
+            )
+
+    # 企業登録の場合、companyNameが必須
+    if request.role == "employer" and not request.companyName:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="企業名は必須です"
+        )
+
+    # メールアドレスを生成（LINE emailがない場合はダミーを使用）
+    email = request.lineEmail if request.lineEmail else f"{request.lineUserId}@line.temp"
+
+    # ユーザーを作成
+    user = User(
+        id=str(uuid.uuid4()),
+        email=email,
+        password_hash=get_password_hash(str(uuid.uuid4())),  # ランダムパスワード生成
+        name=request.name,
+        role=UserRole(request.role),
+        line_user_id=request.lineUserId,
+        line_display_name=request.lineDisplayName,
+        line_picture_url=request.linePictureUrl,
+        line_email=request.lineEmail,
+        company_name=request.companyName if request.role == "employer" else None,
+        industry=request.industry if request.role == "employer" else None,
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # アクセストークンを作成
+    access_token, expires_in = create_access_token(user.id)
+
+    # レスポンスを作成
+    skills = json.loads(user.skills) if user.skills else []
+
+    user_response = UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        role=user.role.value,
+        lineLinked=True,
+        profileCompletion=user.profile_completion or "0",
+        createdAt=user.created_at,
+        skills=skills,
+        experienceYears=user.experience_years,
+        desiredSalaryMin=user.desired_salary_min,
+        desiredSalaryMax=user.desired_salary_max,
+        desiredLocation=user.desired_location,
+        desiredEmploymentType=user.desired_employment_type,
+        companyName=user.company_name,
+        industry=user.industry,
+        companySize=user.company_size,
+        companyDescription=user.company_description,
+        lineUserId=user.line_user_id,
+        lineDisplayName=user.line_display_name,
+        linePictureUrl=user.line_picture_url,
+        lineEmail=user.line_email,
+    )
 
     token_response = TokenResponse(
         accessToken=access_token,

@@ -33,6 +33,20 @@ class LineLinkRequest(BaseModel):
     lineEmail: Optional[str] = None
 
 
+class LineRegisterRequest(BaseModel):
+    """LINE新規登録リクエスト"""
+    lineUserId: str
+    lineDisplayName: str
+    linePictureUrl: Optional[str] = None
+    lineEmail: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=100)
+    role: str = Field(..., pattern="^(seeker|employer)$")
+
+    # 企業の場合（オプション）
+    companyName: Optional[str] = None
+    industry: Optional[str] = None
+
+
 class TokenResponse(BaseModel):
     """トークンレスポンス"""
     accessToken: str
