@@ -117,15 +117,24 @@ gunicorn -c gunicorn.conf.py main:app
 
 **App Service > 構成 > アプリケーション設定**
 
-必須の環境変数：
+#### 必須の環境変数：
 ```
 DATABASE_URL=postgresql://username:password@hostname/dbname?sslmode=require
 OPENAI_API_KEY=your-openai-api-key
 SECRET_KEY=your-secret-key-change-in-production
-CORS_ORIGINS=https://your-frontend-url.azurewebsites.net
+CORS_ORIGINS=https://your-frontend-url.azurestaticapps.net
 DEBUG=False
 LOG_LEVEL=INFO
 ```
+
+#### オプション - LINE通知機能用（未実装）：
+```
+LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token
+LINE_CHANNEL_SECRET=your-line-channel-secret
+```
+
+⚠️ **注意**: LINE認証（ログイン・連携）はフロントエンドのLIFF IDのみで動作します。
+バックエンドのLINE設定は、将来実装予定のLINE通知機能（メッセージ送信）でのみ必要です。
 
 ---
 

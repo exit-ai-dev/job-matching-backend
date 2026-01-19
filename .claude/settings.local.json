@@ -13,7 +13,11 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "Bash(tree:*)",
+      "Bash(python init_db.py:*)"
     ]
   }
 }
