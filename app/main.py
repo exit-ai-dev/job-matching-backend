@@ -23,8 +23,22 @@ app = FastAPI(
 )
 
 # CORSミドルウェアを追加
-# 環境変数から CORS オリジンを取得し、空白を除去
-cors_origins_list = [origin.strip() for origin in settings.cors_origins.split(",")]
+# Azure環境変数のバグ対応: ハードコーディングで設定
+cors_origins_list = [
+    "https://gray-sky-0b7ccbf00.6.azurestaticapps.net",  # Azure Static Web Apps (本番)
+    "http://localhost:5173",  # ローカル開発
+    "http://localhost:5174",  # ローカル開発（代替ポート）
+    "http://localhost:5175",  # ローカル開発（代替ポート）
+]
+
+# 環境変数からも読み込む（バックアップ）
+try:
+    env_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+    cors_origins_list.extend(env_origins)
+    # 重複を削除
+    cors_origins_list = list(set(cors_origins_list))
+except Exception as e:
+    logger.warning(f"Failed to load CORS origins from environment: {e}")
 
 app.add_middleware(
     CORSMiddleware,
