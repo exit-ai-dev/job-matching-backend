@@ -9,3 +9,6 @@ venv/
 nul
 NUL
 
+# Temporary files
+tmpclaude-*
+

@@ -26,6 +26,9 @@ class User(Base):
 
     # LINE連携
     line_user_id = Column(String(100), unique=True, nullable=True, index=True)
+    line_display_name = Column(String(100), nullable=True)
+    line_picture_url = Column(String(500), nullable=True)
+    line_email = Column(String(255), nullable=True)
     line_linked_at = Column(DateTime(timezone=True), nullable=True)
 
     # 求職者固有フィールド

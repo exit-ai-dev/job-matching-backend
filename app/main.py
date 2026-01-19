@@ -67,6 +67,47 @@ async def startup_event():
     logger.info(f"CORS Origins: {cors_origins_list}")
     logger.info(f"Debug mode: {settings.debug}")
 
+    # Run database migrations
+    try:
+        logger.info("Running database migrations...")
+        from app.db.session import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            # Check and add LINE fields if they don't exist
+            check_sql = text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'users'
+                AND column_name IN ('line_display_name', 'line_picture_url', 'line_email')
+            """)
+
+            existing_columns = db.execute(check_sql).fetchall()
+            existing_column_names = [row[0] for row in existing_columns]
+
+            if 'line_display_name' not in existing_column_names:
+                logger.info("Adding line_display_name column...")
+                db.execute(text("ALTER TABLE users ADD COLUMN line_display_name VARCHAR(100) NULL"))
+
+            if 'line_picture_url' not in existing_column_names:
+                logger.info("Adding line_picture_url column...")
+                db.execute(text("ALTER TABLE users ADD COLUMN line_picture_url VARCHAR(500) NULL"))
+
+            if 'line_email' not in existing_column_names:
+                logger.info("Adding line_email column...")
+                db.execute(text("ALTER TABLE users ADD COLUMN line_email VARCHAR(255) NULL"))
+
+            db.commit()
+            logger.info("Database migrations completed successfully")
+        except Exception as e:
+            logger.error(f"Migration failed: {e}")
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to run migrations: {e}")
+
 
 @app.get("/")
 async def root():
