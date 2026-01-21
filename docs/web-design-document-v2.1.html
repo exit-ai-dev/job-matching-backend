@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEBアプリケーション基本設計書 v2.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #F8FAFC;
+            color: #334155;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3 { color: #0F172A; }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Navigation */
+        .nav-sticky {
+            position: sticky;
+            top: 2rem;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th { background-color: #F1F5F9; color: #475569; font-weight: 700; text-align: left; padding: 12px 16px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #E2E8F0; }
+        td { padding: 12px 16px; border-bottom: 1px solid #E2E8F0; font-size: 0.9rem; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #F8FAFC; }
+
+        /* Code Blocks */
+        .code-block { background-color: #1E293B; color: #E2E8F0; padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5; }
+
+        /* Status Badges */
+        .badge { display: inline-block; px: 2; py: 0.5; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; }
+        .badge-req { background-color: #DBEAFE; color: #1E40AF; }
+        .badge-get { background-color: #D1FAE5; color: #065F46; }
+        .badge-post { background-color: #FEF3C7; color: #92400E; }
+        .badge-put { background-color: #E0E7FF; color: #3730A3; }
+        .badge-del { background-color: #FEE2E2; color: #991B1B; }
+
+        /* Tree structure */
+        .tree-item { padding-left: 1.5rem; position: relative; }
+        .tree-item:before { content: "├─"; position: absolute; left: 0; color: #94A3B8; }
+        .tree-item:last-child:before { content: "└─"; }
+        .tree-folder { color: #3B82F6; font-weight: 500; }
+        .tree-file { color: #64748B; }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-full md:w-64 bg-white border-r border-slate-200 flex-shrink-0">
+        <div class="p-6 border-b border-slate-100">
+            <h1 class="font-bold text-lg text-slate-800">WEBアプリ基本設計書</h1>
+            <p class="text-xs text-slate-500 mt-1">Version 2.1 (Complete)</p>
+        </div>
+        <nav class="p-4 nav-sticky">
+            <ul class="space-y-1 text-sm font-medium text-slate-600">
+                <li><a href="#overview" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">1. システム概要</a></li>
+                <li><a href="#architecture" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">2. アーキテクチャ</a></li>
+                <li><a href="#file-structure" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">3. ファイル構成</a></li>
+                <li><a href="#screens" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">4. 画面設計</a></li>
+                <li><a href="#database" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">5. データベース設計</a></li>
+                <li><a href="#api" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">6. APIインターフェース</a></li>
+                <li><a href="#auth" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">7. 認証・セキュリティ</a></li>
+                <li><a href="#validation" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">8. バリデーション仕様</a></li>
+                <li><a href="#error-handling" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">9. エラーハンドリング</a></li>
+                <li><a href="#ai-interface" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">10. AI機能連携</a></li>
+                <li><a href="#external-services" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">11. 外部サービス</a></li>
+                <li><a href="#environment" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">12. 環境設定</a></li>
+                <li><a href="#deployment" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">13. デプロイメント</a></li>
+                <li><a href="#performance" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">14. パフォーマンス要件</a></li>
+                <li><a href="#logging" class="block px-3 py-2 rounded hover:bg-slate-50 hover:text-blue-600">15. ログ・監視</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8 md:p-12 max-w-5xl">
+
+        <!-- Section 1: Overview -->
+        <section id="overview" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">1. システム概要・スコープ</h2>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                <h3 class="font-bold text-slate-800 mb-3">1.1 プロジェクト概要</h3>
+                <p class="mb-4 text-slate-600">
+                    本ドキュメントは、求人マッチングプラットフォームの「Webアプリケーション部分」の設計を定義する。
+                    AIの内部ロジック（プロンプト等）およびインフラ詳細（Azure設定等）は別ドキュメントにて定義する。
+                </p>
+
+                <h3 class="font-bold text-slate-800 mt-6 mb-3">1.2 主要機能</h3>
+                <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-4">
+                    <li><strong>求職者機能:</strong> プロフィール登録、求人検索、AIチャット、応募管理</li>
+                    <li><strong>企業機能:</strong> 求人作成・管理、候補者検索、スカウト送信</li>
+                    <li><strong>AI機能:</strong> ベクトル埋め込みによるマッチング、自然言語での求人検索</li>
+                    <li><strong>LINE連携:</strong> LINE LIFF経由の認証とプッシュ通知</li>
+                </ul>
+
+                <h3 class="font-bold text-slate-800 mt-6 mb-2">1.3 修正・変更点 (v2.0→v2.1)</h3>
+                <ul class="list-disc list-inside text-sm text-slate-600 space-y-1">
+                    <li><strong>実装構成の反映:</strong> 実際のファイル構成、DB設計を正確に記載</li>
+                    <li><strong>詳細仕様の追加:</strong> バリデーション、エラーハンドリング、環境変数の詳細を追加</li>
+                    <li><strong>画面一覧の追加:</strong> 全13画面の遷移図と詳細仕様を追加</li>
+                    <li><strong>外部サービス:</strong> OpenAI API、LINE LIFF連携の詳細を追加</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Section 2: Architecture -->
+        <section id="architecture" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">2. アプリケーションアーキテクチャ</h2>
+
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-3">2.1 技術スタック</h3>
+                <table class="w-full">
+                    <tr><th class="w-1/4">Frontend</th><td>React 18.3.1, TypeScript 5.6.2, Vite 6.0.1, Tailwind CSS, Zustand (状態管理)</td></tr>
+                    <tr><th>Backend</th><td>Python 3.10+, FastAPI 0.115.5, SQLAlchemy 2.0.36, Pydantic 2.10.3</td></tr>
+                    <tr><th>Database</th><td>SQLite (開発), PostgreSQL (本番想定)</td></tr>
+                    <tr><th>AI/ML</th><td>OpenAI API (GPT-4o-mini, text-embedding-3-small)</td></tr>
+                    <tr><th>Auth</th><td>JWT (HS256), Access Token (15分) + Refresh Token (7日)</td></tr>
+                    <tr><th>Infrastructure</th><td>Azure App Service (Backend), Azure Static Web Apps (Frontend)</td></tr>
+                    <tr><th>External</th><td>LINE LIFF (認証・通知), SendGrid (メール通知)</td></tr>
+                </table>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="font-bold text-lg mb-3">2.2 レイヤー構成 (Backend)</h3>
+                <p class="text-sm text-slate-600 mb-2">クリーンアーキテクチャに基づく階層化設計</p>
+                <table class="text-sm">
+                    <thead><tr><th>Layer</th><th>Directory</th><th>Responsibility</th></tr></thead>
+                    <tbody>
+                        <tr><td>API Layer</td><td class="mono">api/endpoints/</td><td>HTTP リクエスト/レスポンス処理、ルーティング</td></tr>
+                        <tr><td>Schema Layer</td><td class="mono">schemas/</td><td>入出力データのバリデーション (Pydantic)</td></tr>
+                        <tr><td>Service Layer</td><td class="mono">services/, ml/</td><td>ビジネスロジック、トランザクション管理</td></tr>
+                        <tr><td>Model Layer</td><td class="mono">models/</td><td>データモデル定義 (SQLAlchemy ORM)</td></tr>
+                        <tr><td>Database Layer</td><td class="mono">db/</td><td>DB接続、セッション管理</td></tr>
+                        <tr><td>Core Layer</td><td class="mono">core/</td><td>設定、認証、例外、ロギング</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-lg mb-3">2.3 Frontend アーキテクチャ</h3>
+                <p class="text-sm text-slate-600 mb-2">Feature-based ディレクトリ構成</p>
+                <table class="text-sm">
+                    <thead><tr><th>Layer</th><th>Directory</th><th>Responsibility</th></tr></thead>
+                    <tbody>
+                        <tr><td>Pages</td><td class="mono">features/*/pages/</td><td>ページコンポーネント (ルーティング対象)</td></tr>
+                        <tr><td>UI Components</td><td class="mono">components/ui/</td><td>再利用可能なUIコンポーネント</td></tr>
+                        <tr><td>State Management</td><td class="mono">features/*/store/</td><td>Zustand ストア (グローバル状態)</td></tr>
+                        <tr><td>API Client</td><td class="mono">shared/lib/api.ts</td><td>バックエンドAPIとの通信</td></tr>
+                        <tr><td>Routing</td><td class="mono">routes/</td><td>React Router設定、認証ガード</td></tr>
+                        <tr><td>Types</td><td class="mono">shared/types/</td><td>TypeScript型定義</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section 3: File Structure -->
+        <section id="file-structure" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">3. ファイル構成</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">3.1 バックエンド (FastAPI)</h3>
+            <div class="code-block">
+job-matching-backend/
+├── app/
+│   ├── main.py                       # FastAPI アプリケーション本体、CORS設定
+│   ├── __init__.py
+│   │
+│   ├── api/                          # API Layer
+│   │   ├── __init__.py
+│   │   └── endpoints/                # APIルーター
+│   │       ├── auth.py               # 認証 (login, register, refresh)
+│   │       ├── users.py              # ユーザープロフィール、設定保存
+│   │       ├── jobs.py               # 求人CRUD、検索
+│   │       ├── matching.py           # AIマッチング、キャリアチャット
+│   │       ├── applications.py       # 応募管理
+│   │       ├── scouts.py             # スカウト管理
+│   │       ├── employer.py           # 企業専用機能 (候補者検索)
+│   │       └── conversation.py       # 会話履歴管理
+│   │
+│   ├── core/                         # Core Layer (共通基盤)
+│   │   ├── config.py                 # 環境変数読み込み、設定管理
+│   │   ├── dependencies.py           # FastAPI Depends (認証、DB)
+│   │   ├── exceptions.py             # カスタム例外クラス
+│   │   └── logging.py                # ロギング設定
+│   │
+│   ├── db/                           # Database Layer
+│   │   ├── base.py                   # SQLAlchemy Base
+│   │   └── session.py                # DBセッション管理
+│   │
+│   ├── models/                       # Model Layer (ORM)
+│   │   ├── user.py                   # User モデル (seeker/employer)
+│   │   ├── job.py                    # Job モデル
+│   │   ├── application.py            # Application モデル
+│   │   └── scout.py                  # Scout モデル
+│   │
+│   ├── schemas/                      # Schema Layer (Pydantic)
+│   │   ├── auth.py                   # LoginRequest, TokenResponse
+│   │   ├── user.py                   # UserResponse, ProfileUpdateRequest
+│   │   ├── job.py                    # JobResponse, JobCreateRequest
+│   │   ├── matching.py               # MatchingRequest, CareerChatRequest
+│   │   ├── application.py            # ApplicationResponse
+│   │   └── scout.py                  # ScoutResponse
+│   │
+│   ├── services/                     # Service Layer (Business Logic)
+│   │   ├── openai_service.py         # OpenAI API呼び出し
+│   │   ├── vector_search.py          # ベクトル類似度検索
+│   │   └── conversation_storage.py   # 会話履歴の保存・取得
+│   │
+│   └── ml/                           # AI/ML Service Layer
+│       ├── embedding_service.py      # テキスト→埋め込みベクトル変換
+│       ├── matching_service.py       # マッチングスコア計算
+│       └── conversation_service.py   # AIチャット応答生成
+│
+├── data/                             # データ保存ディレクトリ
+│   ├── jobs.json                     # 求人データ (初期データ)
+│   ├── conversations/                # 会話履歴JSON
+│   └── embeddings/                   # 埋め込みベクトルキャッシュ
+│
+├── docs/                             # ドキュメント
+│   ├── design-document.md
+│   ├── technical-design-document.md
+│   └── web-design-document-v2.1.html # 本ドキュメント
+│
+├── .env                              # 環境変数 (Git管理外)
+├── .gitignore
+├── requirements.txt                  # Python依存パッケージ
+├── Dockerfile                        # Docker設定
+└── README.md
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">3.2 フロントエンド (React + TypeScript)</h3>
+            <div class="code-block">
+job-matching-frontend/
+├── src/
+│   ├── main.tsx                      # アプリケーションエントリーポイント
+│   ├── App.tsx                       # ルートコンポーネント
+│   ├── index.css                     # Tailwind CSSインポート
+│   │
+│   ├── components/                   # UI Components
+│   │   └── ui/                       # Shadcn/ui コンポーネント
+│   │       ├── button.tsx
+│   │       ├── card.tsx
+│   │       ├── input.tsx
+│   │       └── skeleton.tsx
+│   │
+│   ├── features/                     # Feature-based Modules
+│   │   ├── auth/                     # 認証機能
+│   │   │   ├── pages/
+│   │   │   │   ├── LoginPage.tsx
+│   │   │   │   ├── RegisterPage.tsx
+│   │   │   │   └── LineLinkPage.tsx
+│   │   │   ├── hooks/
+│   │   │   │   └── useAuth.ts
+│   │   │   └── store/
+│   │   │       └── authStore.ts      # Zustand ストア (認証状態)
+│   │   │
+│   │   ├── dashboard/                # ダッシュボード
+│   │   │   └── pages/
+│   │   │       └── HomePage.tsx
+│   │   │
+│   │   ├── jobs/                     # 求人機能
+│   │   │   └── pages/
+│   │   │       ├── JobsPage.tsx      # 求人一覧・検索
+│   │   │       └── JobDetailPage.tsx # 求人詳細
+│   │   │
+│   │   ├── applications/             # 応募管理
+│   │   │   └── pages/
+│   │   │       └── ApplicationsPage.tsx
+│   │   │
+│   │   ├── chat/                     # AIチャット
+│   │   │   └── pages/
+│   │   │       └── ChatPage.tsx
+│   │   │
+│   │   ├── onboarding/               # オンボーディング
+│   │   │   └── pages/
+│   │   │       └── PreferencesPage.tsx
+│   │   │
+│   │   ├── scouts/                   # スカウト管理
+│   │   │   └── pages/
+│   │   │       └── ScoutsPage.tsx
+│   │   │
+│   │   ├── candidates/               # 候補者検索 (企業向け)
+│   │   │   └── pages/
+│   │   │       ├── CandidatesPage.tsx
+│   │   │       └── CandidateDetailPage.tsx
+│   │   │
+│   │   └── landing/                  # ランディングページ
+│   │       └── pages/
+│   │           └── LandingPage.tsx
+│   │
+│   ├── routes/                       # Routing
+│   │   ├── index.tsx                 # ルート定義
+│   │   └── ProtectedRoute.tsx        # 認証ガード
+│   │
+│   ├── shared/                       # Shared Modules
+│   │   ├── components/
+│   │   │   └── Layout.tsx            # 共通レイアウト
+│   │   ├── config/
+│   │   │   └── env.ts                # 環境変数
+│   │   ├── lib/
+│   │   │   ├── api.ts                # API Client (Axios)
+│   │   │   └── liff.ts               # LINE LIFF SDK
+│   │   └── types/
+│   │       └── index.ts              # 共通型定義
+│   │
+│   ├── lib/
+│   │   └── utils.ts                  # ユーティリティ関数
+│   │
+│   └── types/
+│       └── shims.d.ts                # 型定義補完
+│
+├── public/                           # 静的ファイル
+├── index.html
+├── package.json
+├── tsconfig.json                     # TypeScript設定
+├── vite.config.ts                    # Vite設定
+├── tailwind.config.js                # Tailwind CSS設定
+└── README.md
+            </div>
+        </section>
+
+        <!-- Section 4: Screen Design -->
+        <section id="screens" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">4. 画面設計</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">4.1 画面一覧</h3>
+            <table class="text-sm">
+                <thead>
+                    <tr>
+                        <th>画面ID</th>
+                        <th>画面名</th>
+                        <th>パス</th>
+                        <th>対象ユーザー</th>
+                        <th>主要機能</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="mono">S01</td>
+                        <td>ランディングページ</td>
+                        <td class="mono">/</td>
+                        <td>未認証</td>
+                        <td>サービス紹介、新規登録誘導</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S02</td>
+                        <td>ログイン画面</td>
+                        <td class="mono">/login</td>
+                        <td>未認証</td>
+                        <td>メール/パスワード認証、LINE連携</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S03</td>
+                        <td>新規登録画面</td>
+                        <td class="mono">/register</td>
+                        <td>未認証</td>
+                        <td>アカウント作成 (seeker/employer選択)</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S04</td>
+                        <td>LINE連携画面</td>
+                        <td class="mono">/line-link</td>
+                        <td>認証済み</td>
+                        <td>LINE LIFF連携処理</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S05</td>
+                        <td>ホーム (ダッシュボード)</td>
+                        <td class="mono">/home</td>
+                        <td>認証済み</td>
+                        <td>統計表示、AIサマリー、プロフィール完成度</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S06</td>
+                        <td>希望条件登録 (オンボーディング)</td>
+                        <td class="mono">/preferences</td>
+                        <td>seeker</td>
+                        <td>スキル、年収、勤務地、雇用形態の登録</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S07</td>
+                        <td>求人一覧・検索</td>
+                        <td class="mono">/jobs</td>
+                        <td>seeker</td>
+                        <td>求人検索、フィルタリング、お気に入り</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S08</td>
+                        <td>求人詳細</td>
+                        <td class="mono">/jobs/:id</td>
+                        <td>seeker</td>
+                        <td>求人詳細表示、応募ボタン</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S09</td>
+                        <td>AIキャリアチャット</td>
+                        <td class="mono">/chat</td>
+                        <td>seeker</td>
+                        <td>自然言語での求人相談、推薦表示</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S10</td>
+                        <td>応募履歴</td>
+                        <td class="mono">/applications</td>
+                        <td>seeker</td>
+                        <td>応募した求人の一覧、ステータス確認</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S11</td>
+                        <td>スカウト一覧</td>
+                        <td class="mono">/scouts</td>
+                        <td>seeker</td>
+                        <td>受信したスカウトの確認、返信</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S12</td>
+                        <td>候補者検索</td>
+                        <td class="mono">/candidates</td>
+                        <td>employer</td>
+                        <td>求職者検索、マッチ度表示</td>
+                    </tr>
+                    <tr>
+                        <td class="mono">S13</td>
+                        <td>候補者詳細</td>
+                        <td class="mono">/candidates/:id</td>
+                        <td>employer</td>
+                        <td>求職者プロフィール詳細、スカウト送信</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">4.2 画面遷移図</h3>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                <div class="code-block">
+┌─────────────────┐
+│ ランディング (S01) │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+┌───▼───┐  ┌──▼──────┐
+│ログイン │  │新規登録  │
+│ (S02)  │  │ (S03)   │
+└───┬───┘  └──┬──────┘
+    │         │
+    └────┬────┘
+         │ [認証成功]
+         │
+    ┌────▼────────┐
+    │ LINE連携 (S04) │ [Optional]
+    └────┬────────┘
+         │
+    ┌────▼──────────┐
+    │ ホーム (S05)    │ ← 認証後のルート
+    └────┬──────────┘
+         │
+    ┌────┴─────────────────┐
+    │                          │
+┌───▼───────┐        ┌────▼──────┐
+│ Seeker用    │        │ Employer用 │
+│ ┌─────────┐│        │┌──────────┐│
+│ │希望条件  ││        ││候補者検索││
+│ │  (S06)  ││        ││  (S12)   ││
+│ └────┬────┘│        │└────┬─────┘│
+│      │     │        │     │      │
+│ ┌────▼────┐│        │┌────▼─────┐│
+│ │求人一覧  ││        ││候補者詳細││
+│ │  (S07)  ││        ││  (S13)   ││
+│ └────┬────┘│        │└──────────┘│
+│      │     │        │             │
+│ ┌────▼────┐│        │             │
+│ │求人詳細  ││        │             │
+│ │  (S08)  ││        │             │
+│ └─────────┘│        │             │
+│             │        │             │
+│ ┌─────────┐│        │             │
+│ │AIチャット││        │             │
+│ │  (S09)  ││        │             │
+│ └─────────┘│        │             │
+│             │        │             │
+│ ┌─────────┐│        │             │
+│ │応募履歴  ││        │             │
+│ │  (S10)  ││        │             │
+│ └─────────┘│        │             │
+│             │        │             │
+│ ┌─────────┐│        │             │
+│ │スカウト  ││        │             │
+│ │  (S11)  ││        │             │
+│ └─────────┘│        │             │
+└─────────────┘        └─────────────┘
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Database -->
+        <section id="database" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">5. データベース設計 (実装版)</h2>
+            <p class="text-sm text-slate-500 mb-4">
+                ※実装上は非正規化したシンプルな構成を採用。seeker/employer両方のフィールドを単一usersテーブルに格納。
+            </p>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">5.1 ER図 (テーブル関連)</h3>
+            <div class="code-block">
+┌─────────────────┐
+│      users      │
+│─────────────────│
+│ id (PK)         │──┐
+│ email           │  │
+│ password_hash   │  │
+│ role            │  │  ┌──────────────────┐
+│ name            │  │  │      jobs        │
+│ skills          │  │  │──────────────────│
+│ ...seeker用     │  └─▶│ id (PK)          │
+│ ...employer用   │     │ employer_id (FK) │
+└─────────────────┘     │ title            │
+        │               │ description      │
+        │               │ salary_min/max   │
+        │               │ embedding        │
+        │               └────┬─────────────┘
+        │                    │
+        │               ┌────┴────────────┐
+        │               │                 │
+   ┌────▼──────────┐   │   ┌─────────────▼─────┐
+   │ applications  │   │   │      scouts       │
+   │───────────────│   │   │───────────────────│
+   │ id (PK)       │   │   │ id (PK)           │
+   │ seeker_id (FK)│◀──┘   │ employer_id (FK)  │
+   │ job_id (FK)   │───────│ seeker_id (FK)    │
+   │ status        │       │ job_id (FK)       │
+   └───────────────┘       │ message           │
+                           └───────────────────┘
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">5.2 テーブル定義</h3>
+
+            <h4 class="font-semibold text-slate-700 mb-2">users テーブル</h4>
+            <table class="text-xs mb-6">
+                <thead><tr><th>Column</th><th>Type</th><th>Constraint</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">id</td><td>String(36)</td><td>PK, UUID</td><td>ユーザーID</td></tr>
+                    <tr><td class="mono">email</td><td>String(255)</td><td>UNIQUE, NOT NULL</td><td>メールアドレス</td></tr>
+                    <tr><td class="mono">password_hash</td><td>String(255)</td><td>NOT NULL</td><td>ハッシュ化パスワード (bcrypt)</td></tr>
+                    <tr><td class="mono">name</td><td>String(100)</td><td>NOT NULL</td><td>ユーザー名</td></tr>
+                    <tr><td class="mono">role</td><td>Enum</td><td>NOT NULL</td><td>seeker / employer</td></tr>
+                    <tr><td class="mono">line_user_id</td><td>String(100)</td><td>UNIQUE, NULLABLE</td><td>LINE連携ID</td></tr>
+                    <tr><td class="mono">skills</td><td>Text</td><td>NULLABLE</td><td>JSON文字列 (求職者用)</td></tr>
+                    <tr><td class="mono">experience_years</td><td>String(20)</td><td>NULLABLE</td><td>経験年数 (求職者用)</td></tr>
+                    <tr><td class="mono">desired_salary_min</td><td>String(50)</td><td>NULLABLE</td><td>希望年収下限 (求職者用)</td></tr>
+                    <tr><td class="mono">desired_location</td><td>String(100)</td><td>NULLABLE</td><td>希望勤務地 (求職者用)</td></tr>
+                    <tr><td class="mono">company_name</td><td>String(200)</td><td>NULLABLE</td><td>会社名 (企業用)</td></tr>
+                    <tr><td class="mono">industry</td><td>String(100)</td><td>NULLABLE</td><td>業種 (企業用)</td></tr>
+                    <tr><td class="mono">profile_completion</td><td>String(10)</td><td>DEFAULT '0'</td><td>プロフィール完成度 (%)</td></tr>
+                    <tr><td class="mono">is_active</td><td>Boolean</td><td>DEFAULT TRUE</td><td>アクティブフラグ</td></tr>
+                    <tr><td class="mono">created_at</td><td>DateTime(TZ)</td><td>NOT NULL</td><td>作成日時</td></tr>
+                    <tr><td class="mono">updated_at</td><td>DateTime(TZ)</td><td>NOT NULL</td><td>更新日時</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="font-semibold text-slate-700 mb-2">jobs テーブル</h4>
+            <table class="text-xs mb-6">
+                <thead><tr><th>Column</th><th>Type</th><th>Constraint</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">id</td><td>String(36)</td><td>PK, UUID</td><td>求人ID</td></tr>
+                    <tr><td class="mono">employer_id</td><td>String(36)</td><td>FK (users.id)</td><td>企業ユーザーID</td></tr>
+                    <tr><td class="mono">title</td><td>String(200)</td><td>NOT NULL</td><td>求人タイトル</td></tr>
+                    <tr><td class="mono">company</td><td>String(200)</td><td>NOT NULL</td><td>会社名</td></tr>
+                    <tr><td class="mono">description</td><td>Text</td><td>NOT NULL</td><td>求人詳細</td></tr>
+                    <tr><td class="mono">location</td><td>String(200)</td><td>NOT NULL</td><td>勤務地</td></tr>
+                    <tr><td class="mono">employment_type</td><td>Enum</td><td>NOT NULL</td><td>full-time / part-time / contract / internship</td></tr>
+                    <tr><td class="mono">salary_min</td><td>Integer</td><td>NULLABLE</td><td>年収下限</td></tr>
+                    <tr><td class="mono">salary_max</td><td>Integer</td><td>NULLABLE</td><td>年収上限</td></tr>
+                    <tr><td class="mono">required_skills</td><td>Text</td><td>NULLABLE</td><td>必須スキル (JSON文字列)</td></tr>
+                    <tr><td class="mono">embedding</td><td>Text</td><td>NULLABLE</td><td>ベクトル埋め込み (JSON, 1536次元)</td></tr>
+                    <tr><td class="mono">status</td><td>Enum</td><td>DEFAULT 'draft'</td><td>draft / published / closed</td></tr>
+                    <tr><td class="mono">remote</td><td>Boolean</td><td>DEFAULT FALSE</td><td>リモートワーク可否</td></tr>
+                    <tr><td class="mono">created_at</td><td>DateTime(TZ)</td><td>NOT NULL</td><td>作成日時</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="font-semibold text-slate-700 mb-2">applications テーブル</h4>
+            <table class="text-xs mb-6">
+                <thead><tr><th>Column</th><th>Type</th><th>Constraint</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">id</td><td>String(36)</td><td>PK, UUID</td><td>応募ID</td></tr>
+                    <tr><td class="mono">seeker_id</td><td>String(36)</td><td>FK (users.id)</td><td>求職者ID</td></tr>
+                    <tr><td class="mono">job_id</td><td>String(36)</td><td>FK (jobs.id)</td><td>求人ID</td></tr>
+                    <tr><td class="mono">status</td><td>String(50)</td><td>DEFAULT 'applied'</td><td>applied / reviewing / interview / rejected / hired</td></tr>
+                    <tr><td class="mono">cover_letter</td><td>Text</td><td>NULLABLE</td><td>志望動機</td></tr>
+                    <tr><td class="mono">applied_at</td><td>DateTime(TZ)</td><td>NOT NULL</td><td>応募日時</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="font-semibold text-slate-700 mb-2">scouts テーブル</h4>
+            <table class="text-xs">
+                <thead><tr><th>Column</th><th>Type</th><th>Constraint</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">id</td><td>String(36)</td><td>PK, UUID</td><td>スカウトID</td></tr>
+                    <tr><td class="mono">employer_id</td><td>String(36)</td><td>FK (users.id)</td><td>送信企業ID</td></tr>
+                    <tr><td class="mono">seeker_id</td><td>String(36)</td><td>FK (users.id)</td><td>受信求職者ID</td></tr>
+                    <tr><td class="mono">job_id</td><td>String(36)</td><td>FK (jobs.id)</td><td>求人ID</td></tr>
+                    <tr><td class="mono">message</td><td>Text</td><td>NULLABLE</td><td>スカウトメッセージ</td></tr>
+                    <tr><td class="mono">status</td><td>String(50)</td><td>DEFAULT 'sent'</td><td>sent / read / replied / rejected</td></tr>
+                    <tr><td class="mono">created_at</td><td>DateTime(TZ)</td><td>NOT NULL</td><td>送信日時</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 6: API Interface -->
+        <section id="api" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">6. APIインターフェース詳細</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">6.1 共通レスポンス形式</h3>
+            <p class="text-sm text-slate-600 mb-2">全てのAPIは統一されたJSON形式で応答する。</p>
+            <div class="code-block">
+// 成功時
+{
+  "status": "success",
+  "data": { ... }
+}
+
+// エラー時
+{
+  "status": "error",
+  "error": {
+    "code": "AUTH_001",
+    "message": "Invalid credentials",
+    "details": []
+  }
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">6.2 認証API</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/auth/register</span>
+                <p class="text-sm text-slate-600 mt-1">新規ユーザー登録</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!",
+  "name": "山田太郎",
+  "role": "seeker"  // or "employer"
+}
+
+// Response
+{
+  "status": "success",
+  "data": {
+    "user": {
+      "id": "user_abc123",
+      "email": "user@example.com",
+      "name": "山田太郎",
+      "role": "seeker"
+    },
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+            </div>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/auth/login</span>
+                <p class="text-sm text-slate-600 mt-1">ログイン</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!"
+}
+
+// Response (同上)
+            </div>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/auth/refresh</span>
+                <p class="text-sm text-slate-600 mt-1">トークン更新</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+
+// Response
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...", // 新しいAccess Token
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."  // 新しいRefresh Token (Rotation)
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">6.3 求人API</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-get">GET</span> <span class="font-mono font-bold">/api/jobs?page=1&perPage=20</span>
+                <p class="text-sm text-slate-600 mt-1">求人一覧取得 (ページネーション)</p>
+            </div>
+            <div class="code-block mb-6">
+// Response
+{
+  "items": [
+    {
+      "id": "job_123",
+      "title": "Reactエンジニア募集",
+      "company": "株式会社Example",
+      "location": "東京都渋谷区",
+      "salary_min": 6000000,
+      "salary_max": 10000000,
+      "employment_type": "full-time",
+      "remote": true,
+      "required_skills": ["React", "TypeScript"],
+      "match_score": 85  // AIマッチングスコア (0-100)
+    }
+  ],
+  "total": 150,
+  "page": 1,
+  "perPage": 20
+}
+            </div>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/jobs/search</span>
+                <p class="text-sm text-slate-600 mt-1">求人検索 (フィルター)</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "keyword": "React",
+  "salary_min": 5000000,
+  "location": "東京都",
+  "employment_type": "full-time",
+  "remote": true,
+  "skills": ["React", "TypeScript"],
+  "page": 1,
+  "perPage": 20
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">6.4 マッチングAPI</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/matching/recommendations</span>
+                <p class="text-sm text-slate-600 mt-1">AIによる求人推薦 (ベクトル類似度)</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "seeker_id": "user_abc123",
+  "top_k": 10
+}
+
+// Response
+{
+  "recommendations": [
+    {
+      "job": { /* Job Object */ },
+      "match_score": 92,
+      "reasons": [
+        "スキルセット (React, TypeScript) が完全一致",
+        "希望年収レンジ内",
+        "リモートワーク可能"
+      ]
+    }
+  ]
+}
+            </div>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/matching/career-chat</span>
+                <p class="text-sm text-slate-600 mt-1">AIキャリアチャット</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "message": "年収800万円以上のReact求人はある?",
+  "conversation_history": [
+    { "role": "user", "content": "エンジニアの求人を探しています" },
+    { "role": "assistant", "content": "承知しました。どのような条件で..." }
+  ],
+  "seeker_profile": {
+    "skills": ["React", "TypeScript", "Node.js"],
+    "experience": "3-5",
+    "location": "東京都",
+    "desired_salary_min": 8000000
+  }
+}
+
+// Response
+{
+  "reply": "はい、条件に合う求人が3件見つかりました。以下をご覧ください。",
+  "recommended_jobs": [
+    { "id": "job_123", "title": "...", "match_score": 88 }
+  ],
+  "usage": {
+    "prompt_tokens": 250,
+    "completion_tokens": 80
+  }
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">6.5 応募API</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/applications</span>
+                <p class="text-sm text-slate-600 mt-1">求人応募</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "job_id": "job_123",
+  "cover_letter": "貴社の求人に大変興味を持ちました..."
+}
+
+// Response
+{
+  "id": "app_xyz789",
+  "job_id": "job_123",
+  "status": "applied",
+  "applied_at": "2025-12-25T10:30:00Z"
+}
+            </div>
+
+            <div class="mb-4">
+                <span class="badge badge-get">GET</span> <span class="font-mono font-bold">/api/applications</span>
+                <p class="text-sm text-slate-600 mt-1">応募履歴取得</p>
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">6.6 スカウトAPI</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/scouts</span>
+                <p class="text-sm text-slate-600 mt-1">スカウト送信 (企業→求職者)</p>
+            </div>
+            <div class="code-block mb-6">
+// Request
+{
+  "seeker_id": "user_seeker123",
+  "job_id": "job_456",
+  "message": "あなたのスキルに大変興味を持ちました..."
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">6.7 企業向けAPI</h3>
+
+            <div class="mb-4">
+                <span class="badge badge-post">POST</span> <span class="font-mono font-bold">/api/employer/candidates/search</span>
+                <p class="text-sm text-slate-600 mt-1">候補者検索 (企業専用)</p>
+            </div>
+            <div class="code-block">
+// Request
+{
+  "job_id": "job_123",  // この求人にマッチする候補者を検索
+  "required_skills": ["React", "TypeScript"],
+  "min_experience": 3,
+  "top_k": 20
+}
+
+// Response
+{
+  "candidates": [
+    {
+      "id": "user_seeker123",
+      "name": "山田太郎",
+      "skills": ["React", "TypeScript", "Node.js"],
+      "experience_years": "3-5",
+      "match_score": 87,
+      "profile_completion": "80"
+    }
+  ]
+}
+            </div>
+        </section>
+
+        <!-- Section 7: Auth & Security -->
+        <section id="auth" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">7. 認証・セキュリティ設計</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-3">7.1 トークン管理</h3>
+                    <table class="text-xs">
+                        <thead><tr><th>種別</th><th>保存場所</th><th>有効期限</th></tr></thead>
+                        <tbody>
+                            <tr><td>Access Token</td><td>メモリ (React State)</td><td>15分</td></tr>
+                            <tr><td>Refresh Token</td><td>HttpOnly Cookie</td><td>7日</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="text-xs text-slate-600 mt-3">
+                        <strong>ローテーション:</strong> Refresh Token使用時に新しいRefresh Tokenを発行し、使用済みトークンを無効化。
+                    </p>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-3">7.2 RBAC (Role-Based Access Control)</h3>
+                    <table class="text-xs">
+                        <thead><tr><th>Role</th><th>Permissions</th></tr></thead>
+                        <tbody>
+                            <tr><td>seeker</td><td>求人閲覧、応募、プロフィール編集</td></tr>
+                            <tr><td>employer</td><td>求人作成、候補者検索、スカウト送信</td></tr>
+                            <tr><td>admin</td><td>全データ閲覧・削除、ユーザーBAN</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">7.3 セキュリティ対策</h3>
+            <table class="text-sm">
+                <thead><tr><th>項目</th><th>対策</th><th>実装箇所</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>パスワード保護</td>
+                        <td>bcrypt ハッシュ化 (cost=12)</td>
+                        <td>app/api/endpoints/auth.py</td>
+                    </tr>
+                    <tr>
+                        <td>CORS</td>
+                        <td>許可オリジンを環境変数で制限 (credentials: true)</td>
+                        <td>app/main.py, app/core/config.py</td>
+                    </tr>
+                    <tr>
+                        <td>SQLインジェクション</td>
+                        <td>SQLAlchemy ORM使用、Parameterized Query</td>
+                        <td>全models/</td>
+                    </tr>
+                    <tr>
+                        <td>XSS</td>
+                        <td>Reactのデフォルトエスケープ、dangerouslySetInnerHTML禁止</td>
+                        <td>全frontend/</td>
+                    </tr>
+                    <tr>
+                        <td>CSRF</td>
+                        <td>JWTトークンベース認証、SameSite Cookie</td>
+                        <td>app/core/dependencies.py</td>
+                    </tr>
+                    <tr>
+                        <td>Rate Limiting</td>
+                        <td>FastAPI SlowAPI (100 req/min/IP)</td>
+                        <td>app/main.py (middleware)</td>
+                    </tr>
+                    <tr>
+                        <td>入力検証</td>
+                        <td>Pydantic バリデーション (全API)</td>
+                        <td>app/schemas/</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 8: Validation -->
+        <section id="validation" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">8. バリデーション仕様</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">8.1 ユーザー登録</h3>
+            <table class="text-sm">
+                <thead><tr><th>フィールド</th><th>ルール</th><th>エラーメッセージ</th></tr></thead>
+                <tbody>
+                    <tr><td>email</td><td>必須、メール形式、最大255文字</td><td>"有効なメールアドレスを入力してください"</td></tr>
+                    <tr><td>password</td><td>必須、8文字以上、英数字記号含む</td><td>"パスワードは8文字以上で、英字・数字・記号を含めてください"</td></tr>
+                    <tr><td>name</td><td>必須、1-100文字</td><td>"名前は1〜100文字で入力してください"</td></tr>
+                    <tr><td>role</td><td>必須、seeker or employer</td><td>"ユーザー種別を選択してください"</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">8.2 求人作成</h3>
+            <table class="text-sm">
+                <thead><tr><th>フィールド</th><th>ルール</th><th>エラーメッセージ</th></tr></thead>
+                <tbody>
+                    <tr><td>title</td><td>必須、3-200文字</td><td>"求人タイトルは3〜200文字で入力してください"</td></tr>
+                    <tr><td>description</td><td>必須、20文字以上</td><td>"求人詳細は20文字以上で入力してください"</td></tr>
+                    <tr><td>salary_min</td><td>0以上の整数、salary_max未満</td><td>"年収下限は上限より小さい値を入力してください"</td></tr>
+                    <tr><td>location</td><td>必須、1-200文字</td><td>"勤務地を入力してください"</td></tr>
+                    <tr><td>employment_type</td><td>必須、定義済みEnum値</td><td>"雇用形態を選択してください"</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">8.3 フロントエンド実装例</h3>
+            <div class="code-block">
+// Zodスキーマによるバリデーション (TypeScript)
+import { z } from 'zod';
+
+const registerSchema = z.object({
+  email: z.string().email('有効なメールアドレスを入力してください'),
+  password: z.string()
+    .min(8, 'パスワードは8文字以上で入力してください')
+    .regex(/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])/,
+           'パスワードには英字・数字・記号を含めてください'),
+  name: z.string().min(1).max(100),
+  role: z.enum(['seeker', 'employer'])
+});
+
+// 使用例
+const result = registerSchema.safeParse(formData);
+if (!result.success) {
+  // result.error.errors にバリデーションエラーが格納される
+}
+            </div>
+        </section>
+
+        <!-- Section 9: Error Handling -->
+        <section id="error-handling" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">9. エラーハンドリング仕様</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">9.1 HTTPステータスコード</h3>
+            <table class="text-sm">
+                <thead><tr><th>Code</th><th>Name</th><th>Usage</th><th>Example</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">200</td><td>OK</td><td>成功</td><td>GET /api/jobs</td></tr>
+                    <tr><td class="mono">201</td><td>Created</td><td>リソース作成成功</td><td>POST /api/jobs</td></tr>
+                    <tr><td class="mono">400</td><td>Bad Request</td><td>バリデーションエラー</td><td>パスワード形式不正</td></tr>
+                    <tr><td class="mono">401</td><td>Unauthorized</td><td>未認証</td><td>トークン無効・期限切れ</td></tr>
+                    <tr><td class="mono">403</td><td>Forbidden</td><td>権限不足</td><td>seeker が求人作成を試みた</td></tr>
+                    <tr><td class="mono">404</td><td>Not Found</td><td>リソース不在</td><td>存在しない求人IDを指定</td></tr>
+                    <tr><td class="mono">409</td><td>Conflict</td><td>重複エラー</td><td>既に登録済みのメールアドレス</td></tr>
+                    <tr><td class="mono">422</td><td>Unprocessable Entity</td><td>セマンティックエラー</td><td>salary_min > salary_max</td></tr>
+                    <tr><td class="mono">429</td><td>Too Many Requests</td><td>Rate Limit超過</td><td>1分間に100回以上のAPI呼び出し</td></tr>
+                    <tr><td class="mono">500</td><td>Internal Server Error</td><td>サーバーエラー</td><td>予期しない例外</td></tr>
+                    <tr><td class="mono">503</td><td>Service Unavailable</td><td>外部サービス障害</td><td>OpenAI API エラー</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">9.2 エラーコード体系</h3>
+            <table class="text-sm">
+                <thead><tr><th>Prefix</th><th>Category</th><th>Example</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">AUTH_</td><td>認証エラー</td><td>AUTH_001: Invalid credentials</td></tr>
+                    <tr><td class="mono">VAL_</td><td>バリデーションエラー</td><td>VAL_002: Email already exists</td></tr>
+                    <tr><td class="mono">PERM_</td><td>権限エラー</td><td>PERM_001: Insufficient permissions</td></tr>
+                    <tr><td class="mono">RES_</td><td>リソースエラー</td><td>RES_404: Job not found</td></tr>
+                    <tr><td class="mono">EXT_</td><td>外部サービスエラー</td><td>EXT_503: OpenAI API unavailable</td></tr>
+                    <tr><td class="mono">SYS_</td><td>システムエラー</td><td>SYS_500: Unexpected error</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">9.3 エラーレスポンス例</h3>
+            <div class="code-block">
+// 400 Bad Request (バリデーションエラー)
+{
+  "status": "error",
+  "error": {
+    "code": "VAL_001",
+    "message": "Validation failed",
+    "details": [
+      {
+        "field": "email",
+        "message": "有効なメールアドレスを入力してください"
+      },
+      {
+        "field": "password",
+        "message": "パスワードは8文字以上で入力してください"
+      }
+    ]
+  }
+}
+
+// 401 Unauthorized (認証エラー)
+{
+  "status": "error",
+  "error": {
+    "code": "AUTH_001",
+    "message": "Invalid credentials",
+    "details": []
+  }
+}
+
+// 503 Service Unavailable (外部API障害)
+{
+  "status": "error",
+  "error": {
+    "code": "EXT_503",
+    "message": "External AI service is temporarily unavailable. Please try again later.",
+    "details": []
+  }
+}
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">9.4 フロントエンドエラーハンドリング</h3>
+            <div class="code-block">
+// API Client (shared/lib/api.ts)
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // トークン期限切れ → 自動リフレッシュ or ログアウト
+      authStore.logout();
+      window.location.href = '/login';
+    } else if (error.response?.status === 503) {
+      // 外部サービス障害 → ユーザーフレンドリーなメッセージ表示
+      toast.error('サーバーが一時的に利用できません。しばらくしてから再度お試しください。');
+    }
+    return Promise.reject(error);
+  }
+);
+            </div>
+        </section>
+
+        <!-- Section 10: AI Interface -->
+        <section id="ai-interface" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">10. AI機能連携仕様</h2>
+            <p class="text-sm text-slate-500 mb-4">Webアプリは「AIロジック」を持たず、AIサービスへの「ゲートウェイ」として機能する。</p>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">10.1 ベクトル埋め込み処理</h3>
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 text-sm text-blue-900">
+                <strong>使用モデル:</strong> OpenAI text-embedding-3-small (1536次元)<br>
+                <strong>対象データ:</strong> 求人description + title、ユーザーskills + experience
+            </div>
+            <div class="code-block">
+# app/ml/embedding_service.py
+def generate_embedding(text: str) -> List[float]:
+    """
+    テキストをベクトル埋め込みに変換
+    """
+    response = openai.Embedding.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+    return response['data'][0]['embedding']  # 1536次元のベクトル
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">10.2 マッチングスコア計算</h3>
+            <p class="text-sm text-slate-600 mb-2">コサイン類似度を0-100%のスコアに変換</p>
+            <div class="code-block">
+# app/ml/matching_service.py
+from sklearn.metrics.pairwise import cosine_similarity
+
+def calculate_match_score(seeker_embedding, job_embedding) -> float:
+    """
+    ベクトル間のコサイン類似度を計算し、0-100のスコアに変換
+    """
+    similarity = cosine_similarity([seeker_embedding], [job_embedding])[0][0]
+    # コサイン類似度: -1 〜 1 → 0 〜 100% に正規化
+    score = (similarity + 1) / 2 * 100
+    return round(score, 2)
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">10.3 キャリアチャットフロー</h3>
+            <div class="code-block">
+┌──────────────┐
+│ ユーザー入力  │
+└──────┬───────┘
+       │
+┌──────▼─────────────────────────┐
+│ Backend: セッションIDから       │
+│ ・会話履歴を取得                │
+│ ・ユーザープロフィールを取得     │
+└──────┬─────────────────────────┘
+       │
+┌──────▼─────────────────────────┐
+│ System Promptに以下を注入:     │
+│ ・ユーザーのスキル              │
+│ ・希望年収・勤務地              │
+│ ・過去の会話履歴                │
+└──────┬─────────────────────────┘
+       │
+┌──────▼─────────────────────────┐
+│ OpenAI GPT-4o-mini 呼び出し    │
+│ (温度=0.7, max_tokens=500)     │
+└──────┬─────────────────────────┘
+       │
+┌──────▼─────────────────────────┐
+│ AI応答 + 推薦求人IDリスト       │
+└──────┬─────────────────────────┘
+       │
+┌──────▼─────────────────────────┐
+│ 会話履歴を保存                  │
+│ (data/conversations/)          │
+└────────────────────────────────┘
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">10.4 コスト管理</h3>
+            <table class="text-sm">
+                <thead><tr><th>API</th><th>モデル</th><th>概算コスト (1000トークン)</th><th>制限</th></tr></thead>
+                <tbody>
+                    <tr><td>Embedding</td><td>text-embedding-3-small</td><td>$0.02</td><td>キャッシュ利用</td></tr>
+                    <tr><td>Chat</td><td>GPT-4o-mini</td><td>$0.15 (input) / $0.60 (output)</td><td>50回/時間/ユーザー</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 11: External Services -->
+        <section id="external-services" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">11. 外部サービス連携</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">11.1 OpenAI API</h3>
+            <table class="text-sm mb-4">
+                <thead><tr><th>用途</th><th>エンドポイント</th><th>モデル</th></tr></thead>
+                <tbody>
+                    <tr><td>ベクトル埋め込み</td><td>/v1/embeddings</td><td>text-embedding-3-small</td></tr>
+                    <tr><td>チャット応答</td><td>/v1/chat/completions</td><td>gpt-4o-mini</td></tr>
+                </tbody>
+            </table>
+            <div class="code-block mb-6">
+# 環境変数
+OPENAI_API_KEY=sk-proj-...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_EMBEDDING_DIMENSION=1536
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">11.2 LINE LIFF (LINE Front-end Framework)</h3>
+            <p class="text-sm text-slate-600 mb-2">LINE連携によるシームレスな認証とプッシュ通知</p>
+            <table class="text-sm mb-4">
+                <thead><tr><th>機能</th><th>実装箇所</th><th>説明</th></tr></thead>
+                <tbody>
+                    <tr><td>LIFF初期化</td><td>shared/lib/liff.ts</td><td>liff.init() でLINE連携を初期化</td></tr>
+                    <tr><td>ユーザーID取得</td><td>LineLinkPage.tsx</td><td>liff.getProfile() でLINE User IDを取得</td></tr>
+                    <tr><td>アカウント連携</td><td>POST /api/auth/link-line</td><td>users.line_user_id に保存</td></tr>
+                    <tr><td>プッシュ通知</td><td>Backend (LINE Messaging API)</td><td>スカウト・応募通知をLINEで送信</td></tr>
+                </tbody>
+            </table>
+            <div class="code-block">
+// 環境変数 (フロントエンド)
+VITE_LIFF_ID=1234567890-abcdefgh
+
+// 環境変数 (バックエンド)
+LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
+LINE_CHANNEL_SECRET=your_channel_secret
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">11.3 SendGrid (メール通知)</h3>
+            <p class="text-sm text-slate-600 mb-2">トランザクションメール送信 (応募完了、選考進捗通知など)</p>
+            <div class="code-block">
+# 環境変数
+SENDGRID_API_KEY=SG.xxx
+SENDGRID_FROM_EMAIL=noreply@job-matching.com
+            </div>
+        </section>
+
+        <!-- Section 12: Environment -->
+        <section id="environment" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">12. 環境設定・環境変数</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">12.1 バックエンド環境変数 (.env)</h3>
+            <div class="code-block">
+# ===== Application Settings =====
+APP_NAME="Job Matching API"
+APP_VERSION="1.0.0"
+DEBUG=False
+ENV=production  # development / staging / production
+
+# ===== Server Configuration =====
+HOST=0.0.0.0
+PORT=8889
+
+# ===== CORS Settings =====
+CORS_ORIGINS=https://your-frontend.azurestaticapps.net,http://localhost:5173
+CORS_CREDENTIALS=true
+CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS,PATCH
+CORS_HEADERS=Accept,Content-Type,Authorization,Origin,X-Requested-With
+
+# ===== Database =====
+DATABASE_URL=sqlite:///./job_matching.db
+# Production: postgresql://user:pass@host:5432/dbname
+
+# ===== OpenAI API =====
+OPENAI_API_KEY=sk-proj-...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_EMBEDDING_DIMENSION=1536
+
+# ===== JWT Authentication =====
+SECRET_KEY=your-secret-key-here-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# ===== File Storage =====
+DATA_DIRECTORY=./data
+CONVERSATIONS_DIRECTORY=./data/conversations
+EMBEDDINGS_DIRECTORY=./data/embeddings
+JOBS_FILE=./data/jobs.json
+
+# ===== Logging =====
+LOG_LEVEL=INFO  # DEBUG / INFO / WARNING / ERROR / CRITICAL
+
+# ===== Matching Configuration =====
+DEFAULT_TOP_K=10
+MATCHING_THRESHOLD=0.5
+
+# ===== LINE Integration =====
+LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token
+LINE_CHANNEL_SECRET=your_channel_secret
+
+# ===== SendGrid =====
+SENDGRID_API_KEY=SG.xxx
+SENDGRID_FROM_EMAIL=noreply@job-matching.com
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">12.2 フロントエンド環境変数 (.env)</h3>
+            <div class="code-block">
+# Backend API URL
+VITE_API_BASE_URL=https://your-backend.azurewebsites.net
+
+# LINE LIFF ID
+VITE_LIFF_ID=1234567890-abcdefgh
+
+# Environment
+VITE_ENV=production  # development / staging / production
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">12.3 Azure App Service 環境変数設定</h3>
+            <p class="text-sm text-slate-600 mb-2">
+                Azure Portal → App Service → 設定 → 環境変数 で以下を設定:
+            </p>
+            <table class="text-sm">
+                <thead><tr><th>Name</th><th>Value (例)</th><th>Note</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">OPENAI_API_KEY</td><td>sk-proj-...</td><td>OpenAI API キー</td></tr>
+                    <tr><td class="mono">SECRET_KEY</td><td>ランダム文字列 (32文字以上)</td><td>JWT署名鍵</td></tr>
+                    <tr><td class="mono">CORS_ORIGINS</td><td>https://your-frontend.azurestaticapps.net</td><td>フロントエンドURL</td></tr>
+                    <tr><td class="mono">DATABASE_URL</td><td>postgresql://...</td><td>PostgreSQL接続文字列</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 13: Deployment -->
+        <section id="deployment" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">13. デプロイメント構成</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">13.1 インフラ構成図</h3>
+            <div class="code-block">
+┌───────────────────────────────────────────────────────────┐
+│                       Azure Cloud                          │
+│                                                             │
+│  ┌──────────────────────┐      ┌──────────────────────┐   │
+│  │ Azure Static Web Apps│      │  Azure App Service   │   │
+│  │ (Frontend)           │◀────▶│  (Backend)           │   │
+│  │ - React SPA          │ CORS │  - Docker Container  │   │
+│  │ - CDN配信            │      │  - FastAPI           │   │
+│  └──────────────────────┘      └──────┬───────────────┘   │
+│                                        │                    │
+│                                        │                    │
+│                                 ┌──────▼───────────────┐   │
+│                                 │ Azure Database for   │   │
+│                                 │ PostgreSQL           │   │
+│                                 │ (Production DB)      │   │
+│                                 └──────────────────────┘   │
+│                                                             │
+│  ┌──────────────────────┐      ┌──────────────────────┐   │
+│  │ Azure Blob Storage   │      │ Application Insights │   │
+│  │ (File uploads)       │      │ (Monitoring/Logging) │   │
+│  └──────────────────────┘      └──────────────────────┘   │
+└───────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────┐
+        │  External Services   │
+        │  - OpenAI API        │
+        │  - LINE Platform     │
+        │  - SendGrid          │
+        └──────────────────────┘
+            </div>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">13.2 CI/CD パイプライン</h3>
+            <table class="text-sm">
+                <thead><tr><th>Component</th><th>Tool</th><th>Trigger</th><th>Steps</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Backend</td>
+                        <td>GitHub Actions</td>
+                        <td>push to main</td>
+                        <td>
+                            1. Dockerビルド<br>
+                            2. Azure App Serviceにデプロイ<br>
+                            3. ヘルスチェック
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Frontend</td>
+                        <td>Azure Static Web Apps CI</td>
+                        <td>push to main</td>
+                        <td>
+                            1. npm install<br>
+                            2. npm run build<br>
+                            3. Azure Static Web Appsにデプロイ
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">13.3 Docker構成</h3>
+            <div class="code-block">
+# Dockerfile (Backend)
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY data ./data
+
+EXPOSE 8889
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8889"]
+            </div>
+        </section>
+
+        <!-- Section 14: Performance -->
+        <section id="performance" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">14. パフォーマンス要件</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">14.1 応答時間目標</h3>
+            <table class="text-sm">
+                <thead><tr><th>API</th><th>目標レスポンスタイム</th><th>最適化手法</th></tr></thead>
+                <tbody>
+                    <tr><td>GET /api/jobs (一覧)</td><td>< 500ms</td><td>インデックス作成、ページネーション</td></tr>
+                    <tr><td>POST /api/jobs/search</td><td>< 1s</td><td>ベクトルDBキャッシュ、並列検索</td></tr>
+                    <tr><td>POST /api/matching/recommendations</td><td>< 2s</td><td>埋め込みキャッシュ、Top-K制限</td></tr>
+                    <tr><td>POST /api/matching/career-chat</td><td>< 5s</td><td>OpenAI Streaming (未実装)</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">14.2 スケーラビリティ</h3>
+            <ul class="list-disc list-inside text-sm text-slate-600 space-y-2">
+                <li><strong>水平スケーリング:</strong> Azure App Service のスケールアウト設定 (最大10インスタンス)</li>
+                <li><strong>キャッシュ:</strong> Azure Redis Cache (検索結果、埋め込みベクトル)</li>
+                <li><strong>CDN:</strong> Azure Static Web Apps 組み込みCDN (静的ファイル配信)</li>
+                <li><strong>DB接続プール:</strong> SQLAlchemy pool_size=20, max_overflow=10</li>
+            </ul>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">14.3 最適化施策</h3>
+            <table class="text-sm">
+                <thead><tr><th>項目</th><th>実装内容</th></tr></thead>
+                <tbody>
+                    <tr><td>DB クエリ</td><td>N+1問題回避 (SQLAlchemy eager loading)、適切なインデックス作成</td></tr>
+                    <tr><td>ベクトル検索</td><td>Faiss ライブラリ導入検討 (現状はNumPy/sklearn)</td></tr>
+                    <tr><td>フロントエンド</td><td>Code Splitting (React.lazy)、画像最適化 (WebP)</td></tr>
+                    <tr><td>API</td><td>Gzip圧縮、不要なデータ除外 (response_model 活用)</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 15: Logging -->
+        <section id="logging" class="mb-16">
+            <h2 class="text-2xl font-bold border-b border-slate-200 pb-2 mb-6">15. ログ・監視要件</h2>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3">15.1 ログレベル</h3>
+            <table class="text-sm">
+                <thead><tr><th>Level</th><th>用途</th><th>出力先</th></tr></thead>
+                <tbody>
+                    <tr><td class="mono">DEBUG</td><td>開発時の詳細ログ</td><td>ローカルコンソール</td></tr>
+                    <tr><td class="mono">INFO</td><td>通常動作ログ (API呼び出し、処理完了)</td><td>Azure Log Analytics</td></tr>
+                    <tr><td class="mono">WARNING</td><td>警告 (Rate Limit接近、非推奨API使用)</td><td>Azure Log Analytics</td></tr>
+                    <tr><td class="mono">ERROR</td><td>エラー (API失敗、DB接続エラー)</td><td>Azure Log Analytics + Application Insights</td></tr>
+                    <tr><td class="mono">CRITICAL</td><td>致命的エラー (サービス停止)</td><td>Azure Log Analytics + アラート通知</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">15.2 監査ログ (Audit Log)</h3>
+            <p class="text-sm text-slate-600 mb-2">個人情報保護のため、以下の操作は必ずDB上の `audit_logs` テーブルに記録する。</p>
+            <table class="text-sm">
+                <thead><tr><th>Event</th><th>Description</th><th>Retention</th></tr></thead>
+                <tbody>
+                    <tr><td>VIEW_RESUME</td><td>企業が求職者の履歴書詳細を閲覧した</td><td>3年</td></tr>
+                    <tr><td>EXPORT_DATA</td><td>CSV等でのデータエクスポート</td><td>3年</td></tr>
+                    <tr><td>LOGIN_FAIL</td><td>連続したログイン失敗 (攻撃検知)</td><td>1年</td></tr>
+                    <tr><td>PROFILE_UPDATE</td><td>ユーザープロフィール更新</td><td>1年</td></tr>
+                    <tr><td>SCOUT_SENT</td><td>スカウト送信</td><td>3年</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">15.3 監視メトリクス</h3>
+            <table class="text-sm">
+                <thead><tr><th>Metric</th><th>Threshold</th><th>Alert</th></tr></thead>
+                <tbody>
+                    <tr><td>API応答時間</td><td>> 5秒</td><td>Slack通知</td></tr>
+                    <tr><td>エラー率</td><td>> 5%</td><td>メール + Slack</td></tr>
+                    <tr><td>OpenAI APIコスト</td><td>> $100/日</td><td>メール通知</td></tr>
+                    <tr><td>CPU使用率</td><td>> 80%</td><td>自動スケールアウト</td></tr>
+                    <tr><td>DB接続数</td><td>> pool_size * 0.8</td><td>警告ログ</td></tr>
+                </tbody>
+            </table>
+
+            <h3 class="font-bold text-lg text-slate-700 mb-3 mt-8">15.4 Application Insights 設定</h3>
+            <div class="code-block">
+# 環境変数
+APPLICATIONINSIGHTS_CONNECTION_STRING=InstrumentationKey=xxx;IngestionEndpoint=https://...
+
+# 監視項目
+- Request/Response トレース
+- 依存関係トレース (OpenAI API, Database)
+- 例外トラッキング
+- カスタムメトリクス (マッチングスコア平均、チャット応答時間)
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-16 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
+            <p>WEBアプリケーション基本設計書 v2.1</p>
+            <p class="mt-1">Job Matching Platform - 2025</p>
+        </footer>
+
+    </main>
+
+</body>
+</html>
