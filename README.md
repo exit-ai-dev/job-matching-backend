@@ -1,141 +1,187 @@
-# FastAPI Job Matching System
+# JobMatch AI システム - DB情報とダミーデータ生成
 
-## プロジェクト構成
+このディレクトリには、JobMatch AIシステムのデータベーススキーマ情報とダミーデータ生成ツールが含まれています。
 
-```
-fastapi_job_matching/
-├── main.py                          # メインアプリケーション（全サービス統合）
-├── requirements.txt                 # Python依存パッケージ
-├── .env.example                     # 環境変数サンプル
-├── config/
-│   └── database.py                 # DB接続設定
-├── models/
-│   ├── user.py                     # ユーザー関連モデル
-│   ├── job.py                      # 求人関連モデル
-│   └── conversation.py             # 会話関連モデル
-├── schemas/
-│   ├── user.py                     # ユーザーAPIスキーマ
-│   ├── job.py                      # 求人APIスキーマ
-│   └── matching.py                 # マッチングAPIスキーマ
-├── services/
-│   ├── auth_service.py             # 認証サービス
-│   ├── matching_service.py         # マッチングサービス
-│   ├── conversation_service.py     # 会話管理サービス
-│   ├── enrichment_service.py       # エンリッチメントサービス
-│   ├── scout_service.py            # スカウトサービス
-│   └── analytics_service.py        # 分析サービス
-├── api/
-│   ├── user_api.py                 # ユーザー向けAPI
-│   ├── company_api.py              # 企業向けAPI
-│   └── admin_api.py                # 管理者向けAPI
-└── utils/
-    ├── ai_utils.py                 # AI関連ユーティリティ
-    ├── scoring_utils.py            # スコアリングユーティリティ
-    └── helpers.py                  # 汎用ヘルパー
+## 📁 ファイル構成
 
-```
+- `db_schema_summary.md` - データベーススキーマの完全なドキュメント
+- `generate_dummy_data.py` - ダミーデータ生成スクリプト
+- `requirements_dummy_data.txt` - Pythonパッケージの依存関係
 
-## セットアップ
+## 📊 データベーススキーマ概要
 
-### 1. 依存パッケージのインストール
+### テーブル数
+合計 **30テーブル** + 1ビュー
 
-```bash
-pip install -r requirements.txt
-```
+### 主要カテゴリ
+1. **ユーザー関連** (5テーブル)
+   - personal_date, user_profile, user_preferences_profile, user_personality_analysis, user_sessions
 
-### 2. 環境変数の設定
+2. **企業・求人関連** (4テーブル)
+   - company_date, company_profile, job_attributes, job_additional_answers
 
-`.env.example` をコピーして `.env` を作成し、必要な値を設定してください。
+3. **会話・マッチング関連** (7テーブル)
+   - conversation_logs, conversation_sessions, conversation_turns, user_insights, score_history, chat_history, chat_sessions
 
-```bash
-cp .env.example .env
-```
+4. **ユーザー行動追跡** (3テーブル)
+   - user_interactions, user_interaction_summary (ビュー), search_history
 
-### 3. データベースのセットアップ
+5. **エンリッチメント・トレンド** (5テーブル)
+   - missing_job_info_log, company_enrichment_requests, global_preference_trends, trend_thresholds, current_weekly_trends
 
-PostgreSQLデータベースを作成し、`.env` に接続情報を設定してください。
+6. **基本項目管理** (1テーブル)
+   - baseline_job_fields
 
-## 起動方法
+7. **スカウト関連** (1テーブル)
+   - scout_messages
 
-### 開発環境での起動
+8. **動的質問関連** (2テーブル)
+   - dynamic_questions, user_question_responses
+
+## 🚀 ダミーデータ生成の使い方
+
+### 1. 前提条件
+
+- PostgreSQL 12以上がインストールされていること
+- pgvector拡張機能がインストールされていること（求人のベクトル埋め込み用）
+- Python 3.8以上
+
+### 2. 環境セットアップ
 
 ```bash
-# 方法1: uvicornで直接起動
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# 方法2: Pythonスクリプトとして起動
-python main.py
+# 必要なPythonパッケージをインストール
+pip install -r requirements_dummy_data.txt
 ```
 
-### 本番環境での起動
+### 3. データベースの準備
 
 ```bash
-# gunicornを使用（ワーカー4つ）
-gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+# PostgreSQLに接続してデータベースを作成
+createdb jobmatch
+
+# スキーマを適用（元のプロジェクトのSQLファイルを使用）
+psql -d jobmatch -f db_schema_complete.sql
+psql -d jobmatch -f create_chat_sessions.sql
+
+# pgvector拡張を有効化
+psql -d jobmatch -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-## API エンドポイント
-
-### ユーザー向けAPI (`/api/user`)
-
-- `POST /api/user/register` - ユーザー登録
-- `POST /api/user/login` - ログイン
-- `GET /api/user/profile` - プロフィール取得
-- `PUT /api/user/profile` - プロフィール更新
-- `POST /api/user/chat` - 求人チャット
-- `GET /api/user/recommendations` - おすすめ求人取得
-
-### 企業向けAPI (`/api/company`)
-
-- `POST /api/company/register` - 企業登録
-- `POST /api/company/login` - ログイン
-- `POST /api/company/jobs` - 求人登録
-- `GET /api/company/jobs` - 求人一覧取得
-- `PUT /api/company/jobs/{job_id}` - 求人更新
-- `POST /api/company/scout/search` - スカウト候補検索
-- `POST /api/company/scout/send` - スカウト送信
-- `GET /api/company/enrichment/requests` - エンリッチメント要求一覧
-
-### 管理者向けAPI (`/api/admin`)
-
-- `GET /api/admin/stats` - システム統計
-- `GET /api/admin/trends` - トレンド分析
-- `POST /api/admin/data/seed` - ダミーデータ生成
-
-## ドキュメント
-
-起動後、以下のURLでインタラクティブなAPIドキュメントを確認できます：
-
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-## 開発ガイド
-
-### 新しいエンドポイントの追加
-
-1. `schemas/` に必要なPydanticモデルを定義
-2. `services/` にビジネスロジックを実装
-3. `api/` にエンドポイントを追加
-4. `main.py` でルーターを登録
-
-### テストの実行
+### 4. ダミーデータの生成
 
 ```bash
-pytest tests/
+# 基本的な使い方
+python generate_dummy_data.py --password your_password
+
+# カスタムオプション
+python generate_dummy_data.py \
+  --host localhost \
+  --database jobmatch \
+  --user postgres \
+  --password your_password \
+  --port 5432
 ```
 
-## トラブルシューティング
+### 5. 生成されるデータ量
 
-### データベース接続エラー
+| カテゴリ | データ件数 |
+|---------|-----------|
+| ユーザー | 50人 |
+| 企業 | 20社 |
+| 求人 | 100件 |
+| 会話セッション | 30セッション |
+| ユーザーインタラクション | 500件 |
+| スカウトメッセージ | 80件 |
+| その他 | 各テーブルに応じた適切な量 |
 
-- `.env` ファイルのDB接続情報を確認
-- PostgreSQLサービスが起動しているか確認
+## 📖 スキーマドキュメントの見方
 
-### OpenAI APIエラー
+`db_schema_summary.md`ファイルには以下の情報が含まれています：
 
-- `.env` ファイルの `OPENAI_API_KEY` を確認
-- APIクォータを確認
+1. **テーブル定義**: 各テーブルのカラム名、データ型、制約、説明
+2. **インデックス一覧**: パフォーマンス最適化用のインデックス
+3. **テーブル関係図**: 主要な外部キー関係
+4. **初期データ**: システムに必要な初期設定値
 
-## ライセンス
+## 🔧 カスタマイズ
 
-Proprietary
+### データ量の調整
+
+`generate_dummy_data.py`の以下のパラメータを変更することで、生成されるデータ量を調整できます：
+
+```python
+# generate_all_data()メソッド内
+user_ids = self.generate_users(50)  # ← ユーザー数を変更
+company_ids = self.generate_companies(20)  # ← 企業数を変更
+job_ids = self.generate_jobs(company_ids, 100)  # ← 求人数を変更
+```
+
+### データ内容のカスタマイズ
+
+各テーブルの生成ロジックは個別のメソッドに分かれているため、必要に応じて修正できます：
+
+- `generate_users()` - ユーザーデータ
+- `generate_jobs()` - 求人データ
+- `generate_conversation_sessions()` - 会話セッションデータ
+- など
+
+## ⚠️ 注意事項
+
+1. **既存データの削除**: スクリプトは既存データを削除せず、追加のみ行います。データをリセットする場合は手動でテーブルをTRUNCATEしてください。
+
+2. **パスワードハッシュ**: 生成されるパスワードは平文です。本番環境では適切にハッシュ化してください。
+
+3. **ベクトル埋め込み**: `company_profile.embedding`カラムはNULLのままです。実際の埋め込みは別途生成する必要があります。
+
+4. **外部キー整合性**: スクリプトは外部キー制約を考慮していますが、大量データ生成時にはパフォーマンスに注意してください。
+
+## 🐛 トラブルシューティング
+
+### pgvector拡張が見つからない
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install postgresql-XX-pgvector
+
+# macOS
+brew install pgvector
+```
+
+### 接続エラー
+
+```bash
+# PostgreSQLが起動しているか確認
+sudo systemctl status postgresql
+
+# 接続設定を確認
+psql -h localhost -U postgres -d jobmatch
+```
+
+### メモリ不足エラー
+
+大量のデータを生成する場合、バッチサイズを調整してください：
+
+```python
+# execute_values()のpage_sizeパラメータを調整
+execute_values(self.cur, query, data, page_size=100)
+```
+
+## 📚 参考情報
+
+- PostgreSQL公式ドキュメント: https://www.postgresql.org/docs/
+- pgvector: https://github.com/pgvector/pgvector
+- Faker: https://faker.readthedocs.io/
+
+## 🤝 サポート
+
+問題が発生した場合は、以下を確認してください：
+
+1. PostgreSQLのバージョン
+2. pgvector拡張のインストール状況
+3. データベースの接続情報
+4. エラーメッセージの完全な内容
+
+---
+
+**作成日**: 2026年1月20日
+**対象システム**: JobMatch AI (FastAPI版)
