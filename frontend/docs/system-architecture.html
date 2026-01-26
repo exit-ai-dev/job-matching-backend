@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>System Architecture Diagram</title>
+  <style>
+    body { margin: 0; font-family: "Noto Sans JP", "Segoe UI", sans-serif; background: #f2f6f9; color: #1f1f1f; }
+    .wrap { padding: 24px; }
+    h1 { font-size: 18px; margin: 0 0 12px; letter-spacing: 0.08em; }
+    svg { background: #fff; border: 1px solid #d7d7d7; border-radius: 12px; }
+    .box { fill: #f8fff4; stroke: #88b07a; stroke-width: 1.5; }
+    .infra { fill: #eef0ff; stroke: #7c85c4; stroke-width: 1.5; }
+    .ext { fill: #fff1f1; stroke: #d18b8b; stroke-width: 1.5; }
+    .text { font-size: 12px; fill: #333; }
+    .title { font-size: 14px; font-weight: 700; }
+    .arrow { stroke: #333; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+    .muted { fill: #666; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>System Architecture Diagram</h1>
+    <svg width="1200" height="760" viewBox="0 0 1200 760">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L10,3 L0,6 Z" fill="#333" />
+        </marker>
+      </defs>
+
+      <rect x="30" y="40" width="360" height="160" rx="10" class="box" />
+      <text x="50" y="70" class="title">User Browser</text>
+      <text x="50" y="95" class="text">SPA (Vite + React)</text>
+      <text x="50" y="115" class="muted">Routes, UI, Auth State</text>
+      <text x="50" y="135" class="muted">LocalStorage: auth-token</text>
+
+      <rect x="30" y="230" width="360" height="120" rx="10" class="infra" />
+      <text x="50" y="260" class="title">Azure Static Web Apps</text>
+      <text x="50" y="285" class="text">Frontend Hosting</text>
+
+      <rect x="450" y="40" width="360" height="160" rx="10" class="box" />
+      <text x="470" y="70" class="title">Backend API</text>
+      <text x="470" y="95" class="text">FastAPI (Python)</text>
+      <text x="470" y="115" class="muted">/api/auth, /api/jobs, /api/users</text>
+      <text x="470" y="135" class="muted">JWT Auth, CORS</text>
+
+      <rect x="450" y="230" width="360" height="120" rx="10" class="infra" />
+      <text x="470" y="260" class="title">Azure App Service</text>
+      <text x="470" y="285" class="text">Backend Hosting</text>
+
+      <rect x="840" y="40" width="330" height="140" rx="10" class="ext" />
+      <text x="860" y="70" class="title">External: LINE LIFF</text>
+      <text x="860" y="95" class="text">LINE Login / Link</text>
+      <text x="860" y="115" class="muted">LIFF ID + Redirect URLs</text>
+
+      <rect x="840" y="210" width="330" height="140" rx="10" class="ext" />
+      <text x="860" y="240" class="title">External: OpenAI</text>
+      <text x="860" y="265" class="text">Matching / Chat</text>
+      <text x="860" y="285" class="muted">OPENAI_API_KEY</text>
+
+      <rect x="450" y="400" width="360" height="140" rx="10" class="box" />
+      <text x="470" y="430" class="title">Database</text>
+      <text x="470" y="455" class="text">SQLite (default)</text>
+      <text x="470" y="475" class="muted">Users, Jobs, Applications</text>
+
+      <path d="M390 120 L450 120" class="arrow" />
+      <text x="395" y="105" class="muted">REST /api</text>
+
+      <path d="M210 200 L210 230" class="arrow" />
+      <text x="230" y="220" class="muted">Static Assets</text>
+
+      <path d="M630 200 L630 230" class="arrow" />
+      <text x="650" y="220" class="muted">Deploy</text>
+
+      <path d="M810 110 L840 110" class="arrow" />
+      <text x="745" y="95" class="muted">LIFF Auth</text>
+
+      <path d="M810 280 L840 280" class="arrow" />
+      <text x="730" y="265" class="muted">AI Services</text>
+
+      <path d="M630 200 L630 400" class="arrow" />
+      <text x="650" y="340" class="muted">SQLAlchemy</text>
+    </svg>
+  </div>
+</body>
+</html>
