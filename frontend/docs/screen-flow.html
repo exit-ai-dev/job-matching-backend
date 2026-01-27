@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Screen Flow Diagram</title>
+  <style>
+    body { margin: 0; font-family: "Noto Sans JP", "Segoe UI", sans-serif; background: #f6f3f1; color: #1f1f1f; }
+    .wrap { padding: 24px; }
+    h1 { font-size: 18px; margin: 0 0 12px; letter-spacing: 0.08em; }
+    svg { background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+    .node { fill: #f2f7ff; stroke: #7a9fd6; stroke-width: 1.5; }
+    .node2 { fill: #fff4e8; stroke: #d6a66a; stroke-width: 1.5; }
+    .text { font-size: 12px; fill: #333; }
+    .title { font-size: 14px; font-weight: 700; }
+    .arrow { stroke: #333; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+    .muted { fill: #666; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Screen Flow Diagram</h1>
+    <svg width="1200" height="760" viewBox="0 0 1200 760">
+      <defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L10,3 L0,6 Z" fill="#333" />
+        </marker>
+      </defs>
+
+      <rect x="40" y="60" width="180" height="60" rx="8" class="node" />
+      <text x="60" y="95" class="text">Landing</text>
+
+      <rect x="260" y="60" width="180" height="60" rx="8" class="node" />
+      <text x="280" y="95" class="text">Login</text>
+
+      <rect x="480" y="60" width="180" height="60" rx="8" class="node" />
+      <text x="500" y="95" class="text">Register</text>
+
+      <rect x="700" y="60" width="180" height="60" rx="8" class="node" />
+      <text x="720" y="95" class="text">LINE Link</text>
+
+      <rect x="920" y="60" width="200" height="60" rx="8" class="node2" />
+      <text x="940" y="95" class="text">Preferences (Seeker)</text>
+
+      <rect x="260" y="180" width="180" height="60" rx="8" class="node2" />
+      <text x="280" y="215" class="text">Home / Dashboard</text>
+
+      <rect x="40" y="300" width="180" height="60" rx="8" class="node2" />
+      <text x="60" y="335" class="text">Jobs List</text>
+
+      <rect x="260" y="300" width="180" height="60" rx="8" class="node2" />
+      <text x="280" y="335" class="text">Job Detail</text>
+
+      <rect x="480" y="300" width="180" height="60" rx="8" class="node2" />
+      <text x="500" y="335" class="text">Applications</text>
+
+      <rect x="700" y="300" width="180" height="60" rx="8" class="node2" />
+      <text x="720" y="335" class="text">Chat</text>
+
+      <path d="M220 90 L260 90" class="arrow" />
+      <path d="M440 90 L480 90" class="arrow" />
+      <path d="M660 90 L700 90" class="arrow" />
+
+      <path d="M790 120 L790 180 L440 180" class="arrow" />
+      <text x="700" y="170" class="muted">after link</text>
+
+      <path d="M700 90 L920 90" class="arrow" />
+      <text x="820" y="75" class="muted">seeker only</text>
+
+      <path d="M350 120 L350 180" class="arrow" />
+      <text x="360" y="160" class="muted">login</text>
+
+      <path d="M350 240 L130 300" class="arrow" />
+      <path d="M350 240 L350 300" class="arrow" />
+      <path d="M350 240 L530 300" class="arrow" />
+      <path d="M350 240 L790 300" class="arrow" />
+      <text x="370" y="270" class="muted">nav</text>
+
+      <path d="M220 330 L260 330" class="arrow" />
+      <path d="M440 330 L480 330" class="arrow" />
+
+      <text x="40" y="420" class="muted">Global: logout -> Login</text>
+    </svg>
+  </div>
+</body>
+</html>
