@@ -1,0 +1,63 @@
+name: Deploy to Azure Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify requirements.txt exists
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "Error: requirements.txt not found"
+            exit 1
+          fi
+          echo "requirements.txt found, contents:"
+          cat requirements.txt
+
+      - name: Create deployment package
+        run: |
+          # アプリケーションファイルのみをzipに含める
+          zip -r release.zip . \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "__pycache__/*" \
+            -x "*.pyc" \
+            -x ".venv/*" \
+            -x "venv/*" \
+            -x ".env" \
+            -x "job_matching.db" \
+            -x "*.db" \
+            -x "data/*" \
+            -x "*.log" \
+            -x "requirements.backup.txt"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: release.zip
+
+      - name: Health check
+        run: |
+          echo "Waiting for deployment to complete..."
+          sleep 30
+          echo "Checking health endpoint..."
+          curl -f https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net/health || echo "Health check failed"
