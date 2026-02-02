@@ -9,11 +9,12 @@ from typing import Optional, Any
 class PreferencesRequest(BaseModel):
     """希望条件保存リクエスト"""
     salary: Optional[int] = Field(None, description="希望年収（万円）")
-    jobType: Optional[str] = Field(None, description="希望職種")
+    jobType: Optional[list[str]] = Field(None, description="希望職種（複数可）")
     answers: Optional[dict[str, Any]] = Field(None, description="動的な質問への回答")
 
     # その他の希望条件
     desiredLocation: Optional[str] = None
+    desiredLocations: Optional[list[str]] = Field(None, description="希望勤務地（複数可）")
     desiredEmploymentType: Optional[str] = None
 
 

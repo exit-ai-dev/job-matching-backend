@@ -37,13 +37,16 @@ async def save_preferences(
         current_user.desired_salary_min = str(request.salary)
         current_user.desired_salary_max = str(request.salary)
 
-    # 希望職種をスキルとして保存
+    # 希望職種をスキルとして保存（配列対応）
     if request.jobType:
-        current_user.skills = json.dumps([request.jobType])
+        current_user.skills = json.dumps(request.jobType)
 
     # 希望勤務地・雇用形態
     if request.desiredLocation:
         current_user.desired_location = request.desiredLocation
+    # desiredLocations（複数）が指定された場合は、カンマ区切りで保存
+    if request.desiredLocations:
+        current_user.desired_location = ", ".join(request.desiredLocations)
     if request.desiredEmploymentType:
         current_user.desired_employment_type = request.desiredEmploymentType
 
