@@ -24,6 +24,10 @@ from app.models.job import Job
 from app.models.application import Application
 from app.models.scout import Scout
 from app.models.resume import Resume
+from app.models.company import Company
+from app.models.company_profile import CompanyProfile
+from app.models.user_preferences import UserPreferencesProfile
+from app.models.conversation import ConversationSession, ConversationLog, ChatSession
 
 
 def init_database():
