@@ -94,7 +94,7 @@ async def chat(
 
         # 一定のメッセージ数に達したら、条件を抽出して求人検索
         recommendations = None
-        if len(messages) >= 6:  # 3往復以上の会話
+        if len(messages) >= 2:  # 1往復以上の会話
             try:
                 recommendations = await _extract_and_search_jobs(
                     openai_service,
