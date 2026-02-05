@@ -133,7 +133,7 @@ DECLARE
 BEGIN
     SELECT COUNT(*) INTO chat_count FROM chat_sessions;
     SELECT COUNT(*) INTO pref_count FROM user_preferences_profile;
-    SELECT COUNT(*) INTO jobs_count FROM jobs WHERE status::text = 'published';
+    SELECT COUNT(*) INTO jobs_count FROM jobs WHERE UPPER(status::text) = 'PUBLISHED';
 
     RAISE NOTICE '';
     RAISE NOTICE '=== マイグレーション完了 ===';

@@ -127,7 +127,7 @@ def run_migration():
         pref_count = cur.fetchone()[0]
         print(f"   user_preferences_profile: {pref_count} rows")
 
-        cur.execute("SELECT COUNT(*) FROM jobs WHERE status::text = 'published'")
+        cur.execute("SELECT COUNT(*) FROM jobs WHERE UPPER(status::text) = 'PUBLISHED'")
         jobs_count = cur.fetchone()[0]
         print(f"   jobs (published): {jobs_count} rows")
 

@@ -103,7 +103,7 @@ class JobRecommender:
                         j.status,
                         j.employer_id
                     FROM jobs j
-                    WHERE j.status::text = 'published'
+                    WHERE UPPER(j.status::text) = 'PUBLISHED'
                 """
                 params: List[Any] = []
 
