@@ -5,6 +5,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
 import uuid
 import json
 
@@ -18,12 +19,9 @@ from app.schemas.scout import (
 from app.models.scout import Scout, ScoutStatus
 from app.models.user import User, UserRole
 from app.db.session import get_db
+from app.core.dependencies import CurrentUser
 
 router = APIRouter()
-
-# TODO: 認証ミドルウェアを追加してユーザーIDを取得
-MOCK_USER_ID = "mock-user-id"
-MOCK_USER_ROLE = "seeker"  # or "employer"
 
 
 def scout_to_item(scout: Scout, user_role: str, employer: User = None, seeker: User = None) -> ScoutItem:
@@ -44,7 +42,7 @@ def scout_to_item(scout: Scout, user_role: str, employer: User = None, seeker: U
         message=scout.message,
         matchScore=scout.match_score,
         status=scout.status.value,
-        createdAt=scout.created_at.strftime("%Y-%m-%d"),
+        createdAt=scout.created_at.strftime("%Y-%m-%d") if scout.created_at else "",
         tags=tags,
     )
 
@@ -67,7 +65,7 @@ def scout_to_detail(scout: Scout, user_role: str, employer: User = None, seeker:
         message=scout.message,
         matchScore=scout.match_score,
         status=scout.status.value,
-        createdAt=scout.created_at.strftime("%Y-%m-%d"),
+        createdAt=scout.created_at.strftime("%Y-%m-%d") if scout.created_at else "",
         readAt=scout.read_at.isoformat() if scout.read_at else None,
         repliedAt=scout.replied_at.isoformat() if scout.replied_at else None,
         tags=tags,
@@ -77,31 +75,30 @@ def scout_to_detail(scout: Scout, user_role: str, employer: User = None, seeker:
 
 @router.get("/", response_model=ScoutListResponse)
 async def get_scouts(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
+    status_filter: Optional[str] = Query(None, alias="status"),
 ):
     """
     スカウト一覧を取得（求職者：受信、企業：送信）
 
     Args:
+        current_user: 認証済みユーザー
         status_filter: ステータスフィルター
         db: データベースセッション
 
     Returns:
         スカウト一覧
     """
-    # TODO: 実際のユーザーIDとロールを使用
-    user_id = MOCK_USER_ID
-    user_role = MOCK_USER_ROLE
+    user_role = current_user.role.value
 
     # ユーザーロールに応じてクエリを変更
-    if user_role == "seeker":
+    if current_user.role == UserRole.SEEKER:
         # 求職者：受信したスカウト
-        query = db.query(Scout).filter(Scout.seeker_id == user_id)
+        query = db.query(Scout).filter(Scout.seeker_id == current_user.id)
     else:
         # 企業：送信したスカウト
-        query = db.query(Scout).filter(Scout.employer_id == user_id)
+        query = db.query(Scout).filter(Scout.employer_id == current_user.id)
 
     # ステータスフィルター
     if status_filter and status_filter != "all":
@@ -129,25 +126,22 @@ async def get_scouts(
 @router.post("/", response_model=ScoutDetail, status_code=status.HTTP_201_CREATED)
 async def create_scout(
     request: ScoutCreate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     スカウトを送信（企業のみ）
 
     Args:
         request: スカウト作成リクエスト
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         作成したスカウト
     """
-    # TODO: 実際のユーザーIDとロールを使用
-    user_id = MOCK_USER_ID
-    user_role = MOCK_USER_ROLE
-
     # 企業のみがスカウトを送信可能
-    if user_role != "employer":
+    if current_user.role != UserRole.EMPLOYER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="企業アカウントのみがスカウトを送信できます"
@@ -168,7 +162,7 @@ async def create_scout(
     # スカウトを作成
     scout = Scout(
         id=str(uuid.uuid4()),
-        employer_id=user_id,
+        employer_id=current_user.id,
         seeker_id=request.seekerId,
         job_id=request.jobId,
         title=request.title,
@@ -181,30 +175,26 @@ async def create_scout(
     db.commit()
     db.refresh(scout)
 
-    employer = db.query(User).filter(User.id == user_id).first()
-    return scout_to_detail(scout, user_role, employer, seeker)
+    return scout_to_detail(scout, current_user.role.value, current_user, seeker)
 
 
 @router.get("/{scout_id}", response_model=ScoutDetail)
 async def get_scout(
     scout_id: str,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     スカウト詳細を取得
 
     Args:
         scout_id: スカウトID
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         スカウト詳細
     """
-    # TODO: 実際のユーザーIDとロールを使用
-    user_id = MOCK_USER_ID
-    user_role = MOCK_USER_ROLE
-
     scout = db.query(Scout).filter(Scout.id == scout_id).first()
 
     if not scout:
@@ -214,29 +204,36 @@ async def get_scout(
         )
 
     # アクセス権限チェック
-    if user_role == "seeker" and scout.seeker_id != user_id:
+    if current_user.role == UserRole.SEEKER and scout.seeker_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このスカウトにアクセスする権限がありません"
         )
-    elif user_role == "employer" and scout.employer_id != user_id:
+    elif current_user.role == UserRole.EMPLOYER and scout.employer_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このスカウトにアクセスする権限がありません"
         )
+
+    # 求職者が閲覧した場合、既読にする
+    if current_user.role == UserRole.SEEKER and scout.status == ScoutStatus.NEW:
+        scout.status = ScoutStatus.READ
+        scout.read_at = datetime.utcnow()
+        db.commit()
+        db.refresh(scout)
 
     employer = db.query(User).filter(User.id == scout.employer_id).first()
     seeker = db.query(User).filter(User.id == scout.seeker_id).first()
 
-    return scout_to_detail(scout, user_role, employer, seeker)
+    return scout_to_detail(scout, current_user.role.value, employer, seeker)
 
 
 @router.put("/{scout_id}", response_model=ScoutDetail)
 async def update_scout(
     scout_id: str,
     request: ScoutUpdate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     スカウトステータスを更新
@@ -244,15 +241,12 @@ async def update_scout(
     Args:
         scout_id: スカウトID
         request: 更新内容
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         更新後のスカウト
     """
-    # TODO: 実際のユーザーIDとロールを使用
-    user_id = MOCK_USER_ID
-    user_role = MOCK_USER_ROLE
-
     scout = db.query(Scout).filter(Scout.id == scout_id).first()
 
     if not scout:
@@ -262,7 +256,7 @@ async def update_scout(
         )
 
     # アクセス権限チェック（求職者のみが更新可能）
-    if user_role != "seeker" or scout.seeker_id != user_id:
+    if current_user.role != UserRole.SEEKER or scout.seeker_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このスカウトを更新する権限がありません"
@@ -270,7 +264,13 @@ async def update_scout(
 
     # ステータスを更新
     try:
+        old_status = scout.status
         scout.status = ScoutStatus(request.status)
+
+        # 返信した場合は返信日時を記録
+        if old_status != ScoutStatus.REPLIED and scout.status == ScoutStatus.REPLIED:
+            scout.replied_at = datetime.utcnow()
+
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -283,4 +283,4 @@ async def update_scout(
     employer = db.query(User).filter(User.id == scout.employer_id).first()
     seeker = db.query(User).filter(User.id == scout.seeker_id).first()
 
-    return scout_to_detail(scout, user_role, employer, seeker)
+    return scout_to_detail(scout, current_user.role.value, employer, seeker)

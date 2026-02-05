@@ -24,6 +24,9 @@ from app.models.user import User, UserRole
 from app.models.job import Job
 from app.models.application import Application
 from app.models.scout import Scout
+from app.models.company import Company
+from app.models.company_profile import CompanyProfile
+from app.models.user_preferences import UserPreferencesProfile
 
 import bcrypt
 
@@ -268,6 +271,215 @@ def seed_jobs(db, employers):
     db.commit()
 
 
+def seed_companies(db):
+    """企業データを投入（company_date テーブル）"""
+    print("\n企業データ（company_date）を投入中...")
+
+    companies = [
+        {
+            "company_id": str(uuid.uuid4()),
+            "company_name": "株式会社テックイノベーション",
+            "email": "contact@tech-innovation.co.jp",
+            "password": get_password_hash("company123"),
+            "industry": "IT・通信",
+            "company_size": "100-500名",
+            "founded_year": 2015,
+            "website_url": "https://tech-innovation.co.jp",
+            "description": "AIとクラウド技術を活用したソリューションを提供するIT企業です。",
+        },
+        {
+            "company_id": str(uuid.uuid4()),
+            "company_name": "株式会社デジタルクリエイト",
+            "email": "contact@digital-create.co.jp",
+            "password": get_password_hash("company123"),
+            "industry": "Web・アプリ開発",
+            "company_size": "50-100名",
+            "founded_year": 2018,
+            "website_url": "https://digital-create.co.jp",
+            "description": "スタートアップ向けのWebアプリケーション開発を行っています。",
+        },
+    ]
+
+    created_companies = []
+    for company_data in companies:
+        existing = db.query(Company).filter(Company.email == company_data["email"]).first()
+        if not existing:
+            company = Company(**company_data)
+            db.add(company)
+            created_companies.append(company)
+            print(f"  + {company_data['company_name']}")
+        else:
+            created_companies.append(existing)
+            print(f"  - {company_data['company_name']} (既存)")
+
+    db.commit()
+    return created_companies
+
+
+def seed_company_profiles(db, companies):
+    """求人データを投入（company_profile テーブル - マッチング用）"""
+    print("\n求人データ（company_profile）を投入中...")
+
+    company_map = {c.company_name: c for c in companies}
+
+    profiles_data = [
+        {
+            "company_name": "株式会社テックイノベーション",
+            "job_title": "シニアフルスタックエンジニア",
+            "job_description": "当社のプロダクト開発チームで、フロントエンドからバックエンドまで幅広く開発を担当していただきます。",
+            "location_prefecture": "東京都",
+            "location_city": "渋谷区",
+            "salary_min": 700,
+            "salary_max": 1000,
+            "employment_type": "正社員",
+            "remote_option": "フルリモート可",
+            "flex_time": True,
+            "tech_stack": {"languages": ["Python", "TypeScript"], "frameworks": ["React", "FastAPI"]},
+            "required_skills": ["Python", "React", "AWS", "Docker"],
+            "preferred_skills": ["Kubernetes", "GraphQL"],
+            "team_size": "5-10名",
+            "work_style_details": "フルリモートで働けます。週1回のチームミーティングあり。",
+            "status": "active",
+        },
+        {
+            "company_name": "株式会社テックイノベーション",
+            "job_title": "バックエンドエンジニア（Python）",
+            "job_description": "AIプロダクトのバックエンドAPI開発を担当していただきます。",
+            "location_prefecture": "東京都",
+            "location_city": "渋谷区",
+            "salary_min": 600,
+            "salary_max": 900,
+            "employment_type": "正社員",
+            "remote_option": "フルリモート可",
+            "flex_time": True,
+            "tech_stack": {"languages": ["Python"], "frameworks": ["FastAPI", "Django"]},
+            "required_skills": ["Python", "FastAPI", "PostgreSQL"],
+            "preferred_skills": ["機械学習", "Redis"],
+            "team_size": "5-10名",
+            "status": "active",
+        },
+        {
+            "company_name": "株式会社デジタルクリエイト",
+            "job_title": "UI/UXデザイナー",
+            "job_description": "自社プロダクトのUI/UXデザインを担当していただきます。",
+            "location_prefecture": "東京都",
+            "location_city": "港区",
+            "salary_min": 450,
+            "salary_max": 700,
+            "employment_type": "正社員",
+            "remote_option": "週2-3日リモート",
+            "flex_time": True,
+            "tech_stack": {"tools": ["Figma", "Adobe XD"]},
+            "required_skills": ["Figma", "UI/UX", "Adobe XD"],
+            "preferred_skills": ["フロントエンド開発", "プロトタイピング"],
+            "team_size": "3-5名",
+            "status": "active",
+        },
+    ]
+
+    for profile_data in profiles_data:
+        company = company_map.get(profile_data["company_name"])
+        if not company:
+            continue
+
+        existing = db.query(CompanyProfile).filter(
+            CompanyProfile.job_title == profile_data["job_title"],
+            CompanyProfile.company_id == company.company_id
+        ).first()
+
+        if not existing:
+            profile = CompanyProfile(
+                id=str(uuid.uuid4()),
+                company_id=company.company_id,
+                job_title=profile_data["job_title"],
+                job_description=profile_data["job_description"],
+                location_prefecture=profile_data["location_prefecture"],
+                location_city=profile_data.get("location_city"),
+                salary_min=profile_data["salary_min"],
+                salary_max=profile_data["salary_max"],
+                employment_type=profile_data.get("employment_type", "正社員"),
+                remote_option=profile_data.get("remote_option"),
+                flex_time=profile_data.get("flex_time", False),
+                tech_stack=profile_data.get("tech_stack"),
+                required_skills=profile_data.get("required_skills"),
+                preferred_skills=profile_data.get("preferred_skills"),
+                team_size=profile_data.get("team_size"),
+                work_style_details=profile_data.get("work_style_details"),
+                status=profile_data.get("status", "active"),
+            )
+            db.add(profile)
+            print(f"  + {profile_data['job_title']}")
+        else:
+            print(f"  - {profile_data['job_title']} (既存)")
+
+    db.commit()
+
+
+def seed_user_preferences(db):
+    """ユーザー希望条件を投入（user_preferences_profile テーブル）"""
+    print("\nユーザー希望条件（user_preferences_profile）を投入中...")
+
+    # 既存の求職者ユーザーを取得
+    seekers = db.query(User).filter(User.role == UserRole.SEEKER).all()
+
+    preferences_map = {
+        "seeker1@example.com": {
+            "job_title": "フルスタックエンジニア",
+            "location_prefecture": "東京都",
+            "salary_min": 600,
+            "salary_max": 800,
+            "remote_work_preference": "フルリモート希望",
+            "employment_type": "正社員",
+            "industry_preferences": ["IT・通信", "Web・アプリ開発"],
+        },
+        "seeker2@example.com": {
+            "job_title": "UI/UXデザイナー",
+            "location_prefecture": "東京都",
+            "salary_min": 500,
+            "salary_max": 700,
+            "remote_work_preference": "週2-3日リモート",
+            "employment_type": "正社員",
+            "industry_preferences": ["Web・アプリ開発", "デザイン"],
+        },
+        "seeker3@example.com": {
+            "job_title": "バックエンドエンジニア",
+            "location_prefecture": "リモート",
+            "salary_min": 700,
+            "salary_max": 1000,
+            "remote_work_preference": "フルリモート希望",
+            "employment_type": "正社員",
+            "industry_preferences": ["IT・通信", "金融"],
+        },
+    }
+
+    for seeker in seekers:
+        pref_data = preferences_map.get(seeker.email)
+        if not pref_data:
+            continue
+
+        existing = db.query(UserPreferencesProfile).filter(
+            UserPreferencesProfile.user_id == seeker.id
+        ).first()
+
+        if not existing:
+            pref = UserPreferencesProfile(
+                user_id=seeker.id,
+                job_title=pref_data["job_title"],
+                location_prefecture=pref_data["location_prefecture"],
+                salary_min=pref_data["salary_min"],
+                salary_max=pref_data["salary_max"],
+                remote_work_preference=pref_data["remote_work_preference"],
+                employment_type=pref_data["employment_type"],
+                industry_preferences=pref_data["industry_preferences"],
+            )
+            db.add(pref)
+            print(f"  + {seeker.email}")
+        else:
+            print(f"  - {seeker.email} (既存)")
+
+    db.commit()
+
+
 def main():
     """メイン処理"""
     print("=" * 50)
@@ -289,14 +501,26 @@ def main():
     print("\n2. ダミーデータ投入")
     db = SessionLocal()
     try:
+        # 基本テーブル
         employers = seed_users(db)
         seed_jobs(db, employers)
+
+        # マッチング用テーブル
+        companies = seed_companies(db)
+        seed_company_profiles(db, companies)
+        seed_user_preferences(db)
+
         print("\n" + "=" * 50)
         print("完了しました！")
         print("=" * 50)
         print("\nテストアカウント:")
         print("  求職者: seeker1@example.com / password123")
         print("  企業:   employer1@example.com / password123")
+        print("\n作成されたテーブル:")
+        print("  - users, jobs, applications, scouts, resumes (基本)")
+        print("  - company_date, company_profile (マッチング用企業・求人)")
+        print("  - user_preferences_profile (ユーザー希望条件)")
+        print("  - conversation_sessions, conversation_logs, chat_sessions (会話)")
     finally:
         db.close()
 
