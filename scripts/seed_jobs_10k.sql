@@ -54,7 +54,7 @@ SELECT
     '社会保険完備 / 交通費支給 / 在宅手当' AS benefits,
     tags_pool.tags AS tags,
     remote_pool.remote AS remote,
-    'published' AS status,
+    'PUBLISHED'::jobstatus AS status,
     (random() < 0.05) AS featured,
     NULL AS embedding,
     jsonb_build_object('source', 'dummy_seed', 'batch', 'seed_jobs_10k')::text AS meta_data,
