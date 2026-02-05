@@ -1,7 +1,5 @@
 -- 10,000 dummy jobs for the `jobs` table (PostgreSQL)
--- Requires at least one employer user in `users` with role = 'employer'.
--- Uses pgcrypto for gen_random_uuid().
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Requires at least one employer user in `users` with role = 'EMPLOYER'.
 
 INSERT INTO jobs (
     id,
@@ -29,7 +27,14 @@ INSERT INTO jobs (
     updated_at
 )
 SELECT
-    gen_random_uuid()::text AS id,
+    lower(format(
+        '%s-%s-%s-%s-%s',
+        substr(md5(random()::text), 1, 8),
+        substr(md5(random()::text), 9, 4),
+        substr(md5(random()::text), 13, 4),
+        substr(md5(random()::text), 17, 4),
+        substr(md5(random()::text), 21, 12)
+    )) AS id,
     employer.employer_id AS employer_id,
     title_pool.title AS title,
     company_pool.company AS company,
@@ -60,7 +65,7 @@ FROM generate_series(1, 10000) AS gs
 CROSS JOIN LATERAL (
     SELECT id AS employer_id
     FROM users
-    WHERE role = 'employer'
+    WHERE role = 'EMPLOYER'
     ORDER BY random()
     LIMIT 1
 ) AS employer
