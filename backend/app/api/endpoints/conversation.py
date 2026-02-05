@@ -280,7 +280,7 @@ async def _search_jobs_by_preferences(
             top_k=10
         )
 
-        return results
+        return _to_front_recommendations(results)
 
     except Exception as e:
         logger.error(f"Error in _search_jobs_by_preferences: {e}")
@@ -330,3 +330,14 @@ def _load_job_data() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error loading job data: {e}")
         return []
+    
+def _to_front_recommendations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for r in results or []:
+        out.append({
+            "id": str(r.get("id") or r.get("job_id") or ""),
+            "title": r.get("title") or r.get("job_title") or "",
+            "company": r.get("company") or r.get("company_name") or "非公開",
+            "matchScore": int(r.get("matchScore") or r.get("match_score") or 0),
+        })
+    return [x for x in out if x["id"] and x["title"]]
