@@ -1,5 +1,5 @@
 -- 10,000 dummy jobs for the `jobs` table (PostgreSQL)
--- Requires at least one employer user in `users` with role = 'employer'.
+-- Requires at least one employer user in `users`.
 
 INSERT INTO jobs (
     id,
@@ -58,7 +58,7 @@ FROM generate_series(1, 10000) AS gs
 CROSS JOIN LATERAL (
     SELECT id AS employer_id
     FROM users
-    WHERE role = 'employer'
+    WHERE role::text = 'employer' OR role::text = 'EMPLOYER'
     ORDER BY random()
     LIMIT 1
 ) AS employer
@@ -160,4 +160,4 @@ CROSS JOIN LATERAL (
 CROSS JOIN LATERAL (
     SELECT (random() < 0.6) AS remote
 ) AS remote_pool
-WHERE EXISTS (SELECT 1 FROM users WHERE role = 'employer');
+WHERE EXISTS (SELECT 1 FROM users WHERE role::text = 'employer' OR role::text = 'EMPLOYER');
