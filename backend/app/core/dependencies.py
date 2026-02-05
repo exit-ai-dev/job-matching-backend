@@ -15,8 +15,9 @@ from app.models.user import User
 from app.services.openai_service import OpenAIService
 from app.services.conversation_storage import ConversationStorage
 from app.services.vector_search import VectorSearchService
-from app.ml.embedding_service import EmbeddingService
-from app.ml.matching_service import MatchingService
+# 以下は現在未使用のためコメントアウト（メモリ節約）
+# from app.ml.embedding_service import EmbeddingService
+# from app.ml.matching_service import MatchingService
 from app.ml.conversation_service import ConversationService
 
 # セキュリティ
@@ -64,29 +65,31 @@ def get_vector_search_service() -> VectorSearchService:
 
 
 # ML層のシングルトンインスタンス
-_embedding_service: EmbeddingService | None = None
-_matching_service: MatchingService | None = None
+# 以下は現在未使用のためコメントアウト（メモリ節約）
+# _embedding_service: EmbeddingService | None = None
+# _matching_service: MatchingService | None = None
 _conversation_service: ConversationService | None = None
 
 
-def get_embedding_service() -> EmbeddingService:
-    """EmbeddingServiceのシングルトンインスタンスを取得"""
-    global _embedding_service
-    if _embedding_service is None:
-        # SentenceTransformersのデフォルトモデルを使用
-        # (paraphrase-multilingual-MiniLM-L12-v2)
-        _embedding_service = EmbeddingService()
-    return _embedding_service
+# 以下は現在未使用のためコメントアウト（メモリ節約）
+# def get_embedding_service() -> EmbeddingService:
+#     """EmbeddingServiceのシングルトンインスタンスを取得"""
+#     global _embedding_service
+#     if _embedding_service is None:
+#         # SentenceTransformersのデフォルトモデルを使用
+#         # (paraphrase-multilingual-MiniLM-L12-v2)
+#         _embedding_service = EmbeddingService()
+#     return _embedding_service
 
 
-def get_matching_service(
-    embedding_service: Annotated[EmbeddingService, Depends(get_embedding_service)]
-) -> MatchingService:
-    """MatchingServiceのシングルトンインスタンスを取得"""
-    global _matching_service
-    if _matching_service is None:
-        _matching_service = MatchingService(embedding_service)
-    return _matching_service
+# def get_matching_service(
+#     embedding_service: Annotated[EmbeddingService, Depends(get_embedding_service)]
+# ) -> MatchingService:
+#     """MatchingServiceのシングルトンインスタンスを取得"""
+#     global _matching_service
+#     if _matching_service is None:
+#         _matching_service = MatchingService(embedding_service)
+#     return _matching_service
 
 
 def get_conversation_service_dependency(
@@ -153,8 +156,9 @@ SettingsDep = Annotated[Settings, Depends(get_settings_dependency)]
 OpenAIServiceDep = Annotated[OpenAIService, Depends(get_openai_service)]
 ConversationStorageDep = Annotated[ConversationStorage, Depends(get_conversation_storage)]
 VectorSearchServiceDep = Annotated[VectorSearchService, Depends(get_vector_search_service)]
-EmbeddingServiceDep = Annotated[EmbeddingService, Depends(get_embedding_service)]
-MatchingServiceDep = Annotated[MatchingService, Depends(get_matching_service)]
+# 以下は現在未使用のためコメントアウト（メモリ節約）
+# EmbeddingServiceDep = Annotated[EmbeddingService, Depends(get_embedding_service)]
+# MatchingServiceDep = Annotated[MatchingService, Depends(get_matching_service)]
 ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation_service_dependency)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
@@ -166,15 +170,15 @@ __all__ = [
     "get_openai_service",
     "get_conversation_storage",
     "get_vector_search_service",
-    "get_embedding_service",
-    "get_matching_service",
+    # "get_embedding_service",  # 現在未使用
+    # "get_matching_service",   # 現在未使用
     "get_conversation_service_dependency",
     "SettingsDep",
     "OpenAIServiceDep",
     "ConversationStorageDep",
     "VectorSearchServiceDep",
-    "EmbeddingServiceDep",
-    "MatchingServiceDep",
+    # "EmbeddingServiceDep",    # 現在未使用
+    # "MatchingServiceDep",     # 現在未使用
     "ConversationServiceDep",
     "CurrentUser",
 ]
