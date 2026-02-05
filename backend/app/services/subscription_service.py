@@ -121,7 +121,15 @@ class SubscriptionService:
         subscription = self.get_user_subscription(user_id)
 
         if subscription and subscription.plan:
-            plan_tier = subscription.plan.tier
+            tier_value = subscription.plan.tier
+            # DBがVARCHAR（文字列）の場合はEnumに変換
+            if isinstance(tier_value, str):
+                try:
+                    plan_tier = PlanTier(tier_value)
+                except ValueError:
+                    plan_tier = PlanTier.SEEKER_FREE if user.role == UserRole.SEEKER else PlanTier.EMPLOYER_FREE
+            else:
+                plan_tier = tier_value
         else:
             # サブスクリプションがない場合はフリープラン
             if user.role == UserRole.SEEKER:
