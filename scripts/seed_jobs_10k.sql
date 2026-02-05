@@ -44,7 +44,7 @@ SELECT
         stack_pool.primary_skill
     ) AS description,
     location_pool.location AS location,
-    employment_pool.employment_type AS employment_type,
+    employment_pool.employment_type::employmenttype AS employment_type,
     salary_pool.salary_min AS salary_min,
     salary_pool.salary_max AS salary_max,
     salary_pool.salary_text AS salary_text,
