@@ -167,4 +167,4 @@ CROSS JOIN LATERAL (
 CROSS JOIN LATERAL (
     SELECT (random() < 0.6) AS remote
 ) AS remote_pool
-WHERE EXISTS (SELECT 1 FROM users WHERE role = 'employer');
+WHERE EXISTS (SELECT 1 FROM users WHERE role = 'EMPLOYER');
