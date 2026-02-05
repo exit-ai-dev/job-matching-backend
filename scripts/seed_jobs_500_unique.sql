@@ -1,6 +1,7 @@
 -- 500 unique dummy jobs for the `jobs` table (PostgreSQL)
 -- Requires at least one employer user in `users`.
--- Unique titles are guaranteed per run by a generated batch_id + sequence.
+-- Note: enum/boolean columns will repeat by nature, but all text/number columns
+-- are generated to be unique per row.
 
 WITH params AS (
     SELECT md5(clock_timestamp()::text) AS batch_id
@@ -40,30 +41,30 @@ SELECT
         substr(md5(random()::text), 21, 12)
     )) AS id,
     employer.employer_id AS employer_id,
-    format('DUMMY-%s-%s', params.batch_id, gs) AS title,
-    company_pool.company AS company,
+    format('DUMMY-TITLE-%s-%s', params.batch_id, gs) AS title,
+    format('DUMMY-COMPANY-%s-%s', params.batch_id, gs) AS company,
     format(
         'DUMMY-%s-%sの募集です。%sの経験を活かし、プロダクト開発に携わっていただきます。',
         params.batch_id,
         gs,
         stack_pool.primary_skill
     ) AS description,
-    location_pool.location AS location,
+    format('%s %s', location_pool.location, gs) AS location,
     employment_pool.employment_type::employmenttype AS employment_type,
-    salary_pool.salary_min AS salary_min,
-    salary_pool.salary_max AS salary_max,
-    salary_pool.salary_text AS salary_text,
+    (400 + gs)::int AS salary_min,
+    (900 + gs)::int AS salary_max,
+    format('%s〜%s万円', 400 + gs, 900 + gs) AS salary_text,
     required_pool.required_skills AS required_skills,
     preferred_pool.preferred_skills AS preferred_skills,
-    '基本的な開発経験 / チーム開発経験' AS requirements,
-    '社会保険完備 / 交通費支給 / 在宅手当' AS benefits,
+    format('基本的な開発経験 / チーム開発経験 / %s', gs) AS requirements,
+    format('社会保険完備 / 交通費支給 / 在宅手当 / %s', gs) AS benefits,
     tags_pool.tags AS tags,
     remote_pool.remote AS remote,
     'PUBLISHED'::jobstatus AS status,
     FALSE AS featured,
     NULL AS embedding,
-    jsonb_build_object('source', 'dummy_seed', 'batch', params.batch_id, 'script', 'seed_jobs_500_unique')::text AS meta_data,
-    (now() - (random() * interval '30 days')) AS posted_date,
+    jsonb_build_object('source', 'dummy_seed', 'batch', params.batch_id, 'seq', gs, 'script', 'seed_jobs_500_unique')::text AS meta_data,
+    (now() - (gs * interval '1 minute')) AS posted_date,
     now() AS created_at,
     now() AS updated_at
 FROM generate_series(1, 500) AS gs
@@ -77,18 +78,6 @@ CROSS JOIN LATERAL (
 ) AS employer
 CROSS JOIN LATERAL (
     SELECT unnest(ARRAY[
-        '株式会社テックイノベーション',
-        '株式会社デジタルクリエイト',
-        '株式会社ネクストソリューション',
-        '株式会社クラウドワークス',
-        '株式会社システムリンク',
-        '株式会社スマートビジョン'
-    ]) AS company
-    ORDER BY random()
-    LIMIT 1
-) AS company_pool
-CROSS JOIN LATERAL (
-    SELECT unnest(ARRAY[
         '東京都渋谷区',
         '東京都港区',
         '東京都新宿区',
@@ -100,6 +89,22 @@ CROSS JOIN LATERAL (
     ORDER BY random()
     LIMIT 1
 ) AS location_pool
+CROSS JOIN LATERAL (
+    SELECT unnest(ARRAY[
+        'IT',
+        'FinTech',
+        'Healthcare',
+        'EdTech',
+        'Retail',
+        'Logistics',
+        'Manufacturing',
+        'Media',
+        'Gaming',
+        'Energy'
+    ]) AS industry
+    ORDER BY random()
+    LIMIT 1
+) AS industry_pool
 CROSS JOIN LATERAL (
     SELECT unnest(ARRAY[
         'FULL_TIME',
@@ -151,7 +156,9 @@ CROSS JOIN LATERAL (
         '自社開発',
         'B2B',
         'クラウド',
-        '成長中'
+        '成長中',
+        format('industry:%s', industry_pool.industry),
+        format('seq:%s', gs)
     )::text AS tags
 ) AS tags_pool
 CROSS JOIN LATERAL (
