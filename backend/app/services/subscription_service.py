@@ -71,12 +71,16 @@ class SubscriptionService:
 
     def get_user_subscription(self, user_id: str) -> Optional[Subscription]:
         """ユーザーの現在のサブスクリプションを取得"""
+        # DBがVARCHAR（文字列）の場合に対応するため、文字列でもフィルター
         return self.db.query(Subscription).filter(
             Subscription.user_id == user_id,
             Subscription.status.in_([
                 SubscriptionStatus.ACTIVE,
                 SubscriptionStatus.TRIALING,
-                SubscriptionStatus.CANCELED  # 期間終了まで有効
+                SubscriptionStatus.CANCELED,
+                "active",
+                "trialing",
+                "canceled"
             ])
         ).order_by(Subscription.created_at.desc()).first()
 
