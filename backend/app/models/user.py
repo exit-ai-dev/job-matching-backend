@@ -53,6 +53,10 @@ class User(Base):
     # プロフィール完成度
     profile_completion = Column(String(10), default="0", nullable=True)
 
+    # サブスクリプション関連
+    gmo_member_id = Column(String(100), unique=True, nullable=True, index=True)  # GMO会員ID
+    subscription_tier = Column(String(50), default="free", nullable=False)  # 現在のプラン階層
+
     # 共通フィールド
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)

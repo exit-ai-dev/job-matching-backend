@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # GMOペイメント設定
+    gmo_site_id: str = Field(default="", description="GMO Site ID")
+    gmo_site_pass: str = Field(default="", description="GMO Site Password")
+    gmo_shop_id: str = Field(default="", description="GMO Shop ID")
+    gmo_shop_pass: str = Field(default="", description="GMO Shop Password")
+    gmo_api_url: str = Field(
+        default="https://pt01.mul-pay.jp",
+        description="GMO API URL (pt01 for test, p01 for production)"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

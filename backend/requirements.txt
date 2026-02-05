@@ -20,14 +20,17 @@ pydantic[email]==2.10.3
 openai==1.58.1
 
 # ML / Embeddings
-sentence-transformers==2.2.2
-torch==2.1.0
+sentence-transformers==3.0.1
+torch==2.4.0
+transformers>=4.41.0,<4.46.0
+numpy<2
 
 # Environment & Config
 python-dotenv==1.0.1
 
 # Utilities
 pydantic-settings==2.7.0
+python-dateutil==2.9.0
 
 # Testing
 pytest==8.0.0

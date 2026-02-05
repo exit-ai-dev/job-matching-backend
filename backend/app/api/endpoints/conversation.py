@@ -1,5 +1,5 @@
 # app/api/endpoints/conversation.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import logging
@@ -12,9 +12,13 @@ from app.core.dependencies import (
     OpenAIServiceDep,
     ConversationStorageDep,
     VectorSearchServiceDep,
-    SettingsDep
+    SettingsDep,
+    get_db,
+    get_current_user
 )
 from app.core.exceptions import OpenAIError, StorageError, NotFoundError
+from app.core.subscription import verify_subscription_limit
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,9 @@ async def chat(
     request: ChatRequest,
     openai_service: OpenAIServiceDep,
     storage: ConversationStorageDep,
-    settings: SettingsDep
+    settings: SettingsDep,
+    db=Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     会話型AIマッチング - チャットエンドポイント
@@ -55,6 +61,8 @@ async def chat(
     ユーザーとの会話を通じて求人条件を抽出し、最適な求人を提案します。
     """
     try:
+        # サブスクリプション制限チェック（AIチャット）
+        await verify_subscription_limit("ai_chat_limit", db, current_user, increment=True)
 
         # 会話IDの生成または取得
         conversation_id = request.conversation_id or str(uuid.uuid4())
@@ -94,7 +102,7 @@ async def chat(
 
         # 一定のメッセージ数に達したら、条件を抽出して求人検索
         recommendations = None
-        if len(messages) >= 6:  # 3往復以上の会話
+        if len(messages) >= 2:  # 1往復以上の会話
             try:
                 recommendations = await _extract_and_search_jobs(
                     openai_service,
@@ -280,7 +288,7 @@ async def _search_jobs_by_preferences(
             top_k=10
         )
 
-        return results
+        return _to_front_recommendations(results)
 
     except Exception as e:
         logger.error(f"Error in _search_jobs_by_preferences: {e}")
@@ -330,3 +338,14 @@ def _load_job_data() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error loading job data: {e}")
         return []
+    
+def _to_front_recommendations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for r in results or []:
+        out.append({
+            "id": str(r.get("id") or r.get("job_id") or ""),
+            "title": r.get("title") or r.get("job_title") or "",
+            "company": r.get("company") or r.get("company_name") or "非公開",
+            "matchScore": int(r.get("matchScore") or r.get("match_score") or 0),
+        })
+    return [x for x in out if x["id"] and x["title"]]

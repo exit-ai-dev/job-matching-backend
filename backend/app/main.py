@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.api.endpoints import auth, jobs, matching, applications, scouts, conversation, users, employer, resume, candidates
+from app.api.endpoints import auth, jobs, matching, applications, scouts, conversation, users, employer, resume, candidates, billing, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,8 @@ app.include_router(conversation.router, prefix="/api/conversation", tags=["会�
 app.include_router(employer.router, prefix="/api/employer", tags=["企業"])
 app.include_router(resume.router, prefix="/api/resume", tags=["履歴書"])
 app.include_router(candidates.router, prefix="/api/candidates", tags=["候補者"])
+app.include_router(billing.router, prefix="/api/billing", tags=["課金"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhook"])
 
 
 @app.on_event("startup")

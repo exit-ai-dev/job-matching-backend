@@ -16,22 +16,24 @@ from app.schemas.application import (
 )
 from app.models.application import Application, ApplicationStatus
 from app.models.job import Job
+from app.models.user import UserRole
 from app.db.session import get_db
+from app.core.dependencies import CurrentUser
+from app.core.subscription import verify_subscription_limit
 
 router = APIRouter()
-
-# TODO: 認証ミドルウェアを追加してユーザーIDを取得
-MOCK_USER_ID = "mock-user-id"
 
 
 def get_status_color(status: ApplicationStatus) -> str:
     """ステータスに対応する色を取得"""
     colors = {
+        ApplicationStatus.PENDING: "yellow",
         ApplicationStatus.SCREENING: "yellow",
         ApplicationStatus.INTERVIEW: "blue",
         ApplicationStatus.OFFERED: "green",
         ApplicationStatus.REJECTED: "red",
         ApplicationStatus.WITHDRAWN: "gray",
+        ApplicationStatus.ACCEPTED: "green",
     }
     return colors.get(status, "gray")
 
@@ -53,8 +55,8 @@ def application_to_item(application: Application, job: Job) -> ApplicationItem:
         matchScore=application.match_score,
         status=application.status_detail or application.status.value,
         statusColor=application.status_color or get_status_color(application.status),
-        appliedDate=application.applied_at.strftime("%Y-%m-%d"),
-        lastUpdate=application.updated_at.strftime("%Y-%m-%d"),
+        appliedDate=application.applied_at.strftime("%Y-%m-%d") if application.applied_at else "",
+        lastUpdate=application.updated_at.strftime("%Y-%m-%d") if application.updated_at else "",
         nextStep=application.next_step,
         interviewDate=application.interview_date.isoformat() if application.interview_date else None,
         documents={
@@ -83,8 +85,8 @@ def application_to_detail(application: Application, job: Job) -> ApplicationDeta
         status=application.status_detail or application.status.value,
         statusColor=application.status_color or get_status_color(application.status),
         statusDetail=application.status_detail,
-        appliedDate=application.applied_at.strftime("%Y-%m-%d"),
-        lastUpdate=application.updated_at.strftime("%Y-%m-%d"),
+        appliedDate=application.applied_at.strftime("%Y-%m-%d") if application.applied_at else "",
+        lastUpdate=application.updated_at.strftime("%Y-%m-%d") if application.updated_at else "",
         nextStep=application.next_step,
         interviewDate=application.interview_date.isoformat() if application.interview_date else None,
         message=application.message,
@@ -99,24 +101,28 @@ def application_to_detail(application: Application, job: Job) -> ApplicationDeta
 
 @router.get("/", response_model=ApplicationListResponse)
 async def get_applications(
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     自分の応募一覧を取得
 
     Args:
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         応募一覧
     """
-    # TODO: 実際のユーザーIDを使用
-    user_id = MOCK_USER_ID
+    if current_user.role != UserRole.SEEKER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="求職者のみアクセス可能です"
+        )
 
     # 応募を取得
     applications = db.query(Application).filter(
-        Application.seeker_id == user_id
+        Application.seeker_id == current_user.id
     ).order_by(Application.applied_at.desc()).all()
 
     # 求人情報を結合
@@ -135,21 +141,28 @@ async def get_applications(
 @router.post("/", response_model=ApplicationDetail, status_code=status.HTTP_201_CREATED)
 async def create_application(
     request: ApplicationCreate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     応募する
 
     Args:
         request: 応募作成リクエスト
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         作成した応募
     """
-    # TODO: 実際のユーザーIDを使用
-    user_id = MOCK_USER_ID
+    if current_user.role != UserRole.SEEKER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="求職者のみ応募できます"
+        )
+
+    # サブスクリプション制限チェック
+    await verify_subscription_limit("application_limit", db, current_user, increment=True)
 
     # 求人が存在するか確認
     job = db.query(Job).filter(Job.id == request.jobId).first()
@@ -161,7 +174,7 @@ async def create_application(
 
     # 既に応募済みか確認
     existing = db.query(Application).filter(
-        Application.seeker_id == user_id,
+        Application.seeker_id == current_user.id,
         Application.job_id == request.jobId
     ).first()
 
@@ -174,9 +187,9 @@ async def create_application(
     # 応募を作成
     application = Application(
         id=str(uuid.uuid4()),
-        seeker_id=user_id,
+        seeker_id=current_user.id,
         job_id=request.jobId,
-        status=ApplicationStatus.SCREENING,
+        status=ApplicationStatus.PENDING,
         status_detail="書類選考中",
         status_color="yellow",
         message=request.message,
@@ -195,25 +208,68 @@ async def create_application(
 @router.get("/{application_id}", response_model=ApplicationDetail)
 async def get_application(
     application_id: str,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
 ):
     """
     応募詳細を取得
 
     Args:
         application_id: 応募ID
+        current_user: 認証済みユーザー
         db: データベースセッション
 
     Returns:
         応募詳細
     """
-    # TODO: 実際のユーザーIDを使用
-    user_id = MOCK_USER_ID
-
     application = db.query(Application).filter(
-        Application.id == application_id,
-        Application.seeker_id == user_id
+        Application.id == application_id
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="応募が見つかりません"
+        )
+
+    # 求職者本人または求人の企業のみアクセス可能
+    job = db.query(Job).filter(Job.id == application.job_id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="求人が見つかりません"
+        )
+
+    if application.seeker_id != current_user.id and job.employer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この応募へのアクセス権限がありません"
+        )
+
+    return application_to_detail(application, job)
+
+
+@router.put("/{application_id}", response_model=ApplicationDetail)
+async def update_application(
+    application_id: str,
+    request: ApplicationUpdate,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    """
+    応募を更新
+
+    Args:
+        application_id: 応募ID
+        request: 更新内容
+        current_user: 認証済みユーザー
+        db: データベースセッション
+
+    Returns:
+        更新後の応募
+    """
+    application = db.query(Application).filter(
+        Application.id == application_id
     ).first()
 
     if not application:
@@ -229,39 +285,11 @@ async def get_application(
             detail="求人が見つかりません"
         )
 
-    return application_to_detail(application, job)
-
-
-@router.put("/{application_id}", response_model=ApplicationDetail)
-async def update_application(
-    application_id: str,
-    request: ApplicationUpdate,
-    db: Session = Depends(get_db),
-    # TODO: current_user: User = Depends(get_current_user)
-):
-    """
-    応募を更新
-
-    Args:
-        application_id: 応募ID
-        request: 更新内容
-        db: データベースセッション
-
-    Returns:
-        更新後の応募
-    """
-    # TODO: 実際のユーザーIDを使用
-    user_id = MOCK_USER_ID
-
-    application = db.query(Application).filter(
-        Application.id == application_id,
-        Application.seeker_id == user_id
-    ).first()
-
-    if not application:
+    # 求職者本人または求人の企業のみ更新可能
+    if application.seeker_id != current_user.id and job.employer_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="応募が見つかりません"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この応募の更新権限がありません"
         )
 
     # 更新
@@ -281,5 +309,43 @@ async def update_application(
     db.commit()
     db.refresh(application)
 
-    job = db.query(Job).filter(Job.id == application.job_id).first()
     return application_to_detail(application, job)
+
+
+@router.delete("/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def withdraw_application(
+    application_id: str,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    """
+    応募を取り下げる
+
+    Args:
+        application_id: 応募ID
+        current_user: 認証済みユーザー
+        db: データベースセッション
+    """
+    if current_user.role != UserRole.SEEKER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="求職者のみ応募を取り下げできます"
+        )
+
+    application = db.query(Application).filter(
+        Application.id == application_id,
+        Application.seeker_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="応募が見つかりません"
+        )
+
+    # 取り下げステータスに更新
+    application.status = ApplicationStatus.WITHDRAWN
+    application.status_detail = "応募取り下げ"
+    application.status_color = "gray"
+
+    db.commit()
