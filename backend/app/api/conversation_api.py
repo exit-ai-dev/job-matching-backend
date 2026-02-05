@@ -40,7 +40,9 @@ async def chat(req: ChatRequest):
             "id": str(job.job_id),
             "title": job.job_title,
             "company": job.company_name or "非公開",
-            "matchScore": int((job.match_score or 0) * 100),
+            # job.match_score is already a 0-100-ish score in this system.
+            # The frontend expects 0-100.
+            "matchScore": max(0, min(100, int(round(job.match_score or 0)))),
         })
 
     return {
