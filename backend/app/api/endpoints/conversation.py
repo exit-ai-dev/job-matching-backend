@@ -6,7 +6,8 @@ import logging
 import uuid
 from datetime import datetime
 import json
-from pathlib import Path
+
+from sqlalchemy import text
 
 from app.core.dependencies import (
     OpenAIServiceDep,
@@ -105,10 +106,11 @@ async def chat(
         if len(messages) >= 2:  # 1往復以上の会話
             try:
                 recommendations = await _extract_and_search_jobs(
-                    openai_service,
-                    storage,
-                    request.user_id,
-                    messages
+                    openai_service=openai_service,
+                    storage=storage,
+                    user_id=request.user_id,
+                    messages=messages,
+                    db=db,  # ★DBを渡す
                 )
             except Exception as e:
                 logger.warning(f"Failed to extract preferences and search: {e}")
@@ -186,13 +188,13 @@ async def extract_preferences(
     request: ExtractPreferencesRequest,
     openai_service: OpenAIServiceDep,
     storage: ConversationStorageDep,
-    settings: SettingsDep
+    settings: SettingsDep,
+    db=Depends(get_db),
 ):
     """
     会話から条件を抽出し、求人を検索
     """
     try:
-
         # 会話履歴を読み込み
         conversation_data = storage.load_conversation(
             request.user_id,
@@ -209,10 +211,11 @@ async def extract_preferences(
 
         # 求人を検索
         recommendations = await _search_jobs_by_preferences(
-            openai_service,
-            storage,
-            request.user_id,
-            preferences
+            openai_service=openai_service,
+            storage=storage,
+            user_id=request.user_id,
+            preferences=preferences,
+            db=db,  # ★DBを渡す
         )
 
         return ExtractPreferencesResponse(
@@ -234,7 +237,8 @@ async def _extract_and_search_jobs(
     openai_service,
     storage,
     user_id: str,
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    db,
 ) -> List[Dict[str, Any]]:
     """会話から条件を抽出して求人を検索"""
     try:
@@ -243,10 +247,11 @@ async def _extract_and_search_jobs(
 
         # 求人を検索
         return await _search_jobs_by_preferences(
-            openai_service,
-            storage,
-            user_id,
-            preferences
+            openai_service=openai_service,
+            storage=storage,
+            user_id=user_id,
+            preferences=preferences,
+            db=db,
         )
 
     except Exception as e:
@@ -258,25 +263,31 @@ async def _search_jobs_by_preferences(
     openai_service,
     storage,
     user_id: str,
-    preferences: Dict[str, Any]
+    preferences: Dict[str, Any],
+    db,
 ) -> List[Dict[str, Any]]:
-    """条件に基づいて求人を検索"""
+    """条件に基づいて求人を検索（DB版）"""
     try:
         from app.services.vector_search import VectorSearchService
 
         # 検索クエリのエンベディングを作成
         query_embedding = openai_service.create_search_query_embedding(preferences)
 
-        # すべての求人エンベディングを取得
+        # すべての求人エンベディングを取得（storage実装に依存）
         job_embeddings = storage.get_all_job_embeddings()
 
-        if not job_embeddings:
-            logger.warning("No job embeddings found. Initializing job embeddings...")
-            await _initialize_job_embeddings(openai_service, storage)
-            job_embeddings = storage.get_all_job_embeddings()
+        # DBから求人データを読み込み
+        job_data_list = _load_job_data_from_db(db)
 
-        # 求人データを読み込み
-        job_data_list = _load_job_data()
+        if not job_data_list:
+            logger.warning("No jobs found in DB. Returning empty recommendations.")
+            return []
+
+        # embeddingsが未初期化なら初期化
+        if not job_embeddings:
+            logger.warning("No job embeddings found. Initializing job embeddings from DB...")
+            await _initialize_job_embeddings(openai_service, storage, db)
+            job_embeddings = storage.get_all_job_embeddings()
 
         # ベクトル検索
         vector_search = VectorSearchService()
@@ -295,25 +306,29 @@ async def _search_jobs_by_preferences(
         return []
 
 
-async def _initialize_job_embeddings(openai_service, storage):
-    """求人エンベディングを初期化"""
+async def _initialize_job_embeddings(openai_service, storage, db):
+    """求人エンベディングを初期化（DB版）"""
     try:
         from app.services.vector_search import VectorSearchService
 
-        job_data_list = _load_job_data()
+        job_data_list = _load_job_data_from_db(db)
+
+        if not job_data_list:
+            logger.warning("No jobs found in DB for embedding initialization.")
+            return
 
         for job in job_data_list:
             # エンベディング用テキストを作成
-            text = VectorSearchService.create_job_embedding_text(job)
+            text_for_embed = VectorSearchService.create_job_embedding_text(job)
 
             # エンベディングを生成
-            embedding = openai_service.create_embedding(text)
+            embedding = openai_service.create_embedding(text_for_embed)
 
-            # 保存
+            # 保存（storageの実装に依存：ファイル/DB/メモリ等）
             storage.save_job_embedding(
-                job_id=job["id"],
+                job_id=str(job["id"]),
                 embedding=embedding,
-                text=text
+                text=text_for_embed
             )
 
         logger.info(f"Initialized embeddings for {len(job_data_list)} jobs")
@@ -322,30 +337,81 @@ async def _initialize_job_embeddings(openai_service, storage):
         logger.error(f"Error initializing job embeddings: {e}")
 
 
-def _load_job_data() -> List[Dict[str, Any]]:
-    """求人データを読み込み"""
+def _load_job_data_from_db(db) -> List[Dict[str, Any]]:
+    """
+    DBから求人データを読み込み（Azure向け）
+    前提：company_profile に求人、company_date に会社名がある
+    """
     try:
-        data_file = Path("data/jobs.json")
+        rows = db.execute(text("""
+            SELECT
+                cp.id as id,
+                cp.job_title as job_title,
+                COALESCE(cd.company_name, '非公開') as company_name,
+                cp.location_prefecture as location_prefecture,
+                cp.location_city as location_city,
+                cp.salary_min as salary_min,
+                cp.salary_max as salary_max,
+                cp.employment_type as employment_type,
+                cp.remote_option as remote_option,
+                COALESCE(cp.description, '') as description
+            FROM company_profile cp
+            LEFT JOIN company_date cd ON cd.company_id = cp.company_id
+            WHERE (cp.status IN ('active', 'published') OR cp.status IS NULL)
+            ORDER BY cp.created_at DESC
+            LIMIT 500
+        """)).mappings().all()
 
-        if not data_file.exists():
-            logger.warning("jobs.json not found")
-            return []
+        jobs: List[Dict[str, Any]] = []
+        for r in rows:
+            jobs.append({
+                "id": str(r["id"]),
+                "job_title": r["job_title"],
+                "company_name": r["company_name"],
+                "location_prefecture": r["location_prefecture"],
+                "location_city": r["location_city"],
+                "salary_min": r["salary_min"],
+                "salary_max": r["salary_max"],
+                "employment_type": r["employment_type"],
+                "remote_option": r["remote_option"],
+                "description": r["description"],
 
-        with open(data_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get("jobs", [])
+                # weighted_search / create_job_embedding_text 側で別キー参照の可能性があるため保険
+                "title": r["job_title"],
+                "company": r["company_name"],
+            })
+
+        return jobs
 
     except Exception as e:
-        logger.error(f"Error loading job data: {e}")
+        logger.error(f"Error loading job data from DB: {e}")
         return []
-    
+
+
 def _to_front_recommendations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    フロント（ChatPage.tsx）が期待する形式へ整形
+    - id
+    - title
+    - company
+    - matchScore (0-100想定)
+    """
     out = []
     for r in results or []:
+        # matchScoreが 0-1 の場合に備えて補正（保険）
+        raw_score = r.get("matchScore") or r.get("match_score") or 0
+        try:
+            score = float(raw_score)
+            if 0 < score <= 1:
+                score = score * 100
+            score = int(score)
+        except Exception:
+            score = 0
+
         out.append({
             "id": str(r.get("id") or r.get("job_id") or ""),
             "title": r.get("title") or r.get("job_title") or "",
             "company": r.get("company") or r.get("company_name") or "非公開",
-            "matchScore": int(r.get("matchScore") or r.get("match_score") or 0),
+            "matchScore": score,
         })
     return [x for x in out if x["id"] and x["title"]]

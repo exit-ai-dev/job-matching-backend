@@ -11,6 +11,9 @@ from app.schemas.auth import UserResponse
 from app.core.dependencies import CurrentUser
 from app.db.session import get_db
 
+from sqlalchemy import text
+from datetime import datetime
+
 router = APIRouter()
 
 
@@ -20,38 +23,57 @@ async def save_preferences(
     current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
-    """
-    希望条件を保存
-
-    Args:
-        request: 希望条件リクエスト
-        current_user: 現在のユーザー
-        db: データベースセッション
-
-    Returns:
-        更新されたユーザー情報
-    """
-    # 希望年収を設定
+    # --- User側保存（既存ロジックOK） ---
     if request.salary is not None:
-        # salaryは単一の値だが、minとmaxに同じ値を設定
+        # 可能ならstrではなく数値で保持（Userモデルの型に合わせて）
         current_user.desired_salary_min = str(request.salary)
         current_user.desired_salary_max = str(request.salary)
 
-    # 希望職種をスキルとして保存（配列対応）
     if request.jobType:
-        current_user.skills = json.dumps(request.jobType)
+        current_user.skills = json.dumps(request.jobType, ensure_ascii=False)
 
-    # 希望勤務地・雇用形態
     if request.desiredLocation:
         current_user.desired_location = request.desiredLocation
-    # desiredLocations（複数）が指定された場合は、カンマ区切りで保存
     if request.desiredLocations:
         current_user.desired_location = ", ".join(request.desiredLocations)
+
     if request.desiredEmploymentType:
         current_user.desired_employment_type = request.desiredEmploymentType
 
-    # プロフィール完成度を更新（希望条件を設定したので80%に）
     current_user.profile_completion = "80"
+
+    # --- AI参照用 profile テーブルにも保存（ここが今回のキモ） ---
+    job_title = request.jobType[0] if request.jobType else None
+
+    location_prefecture = request.desiredLocation
+    if (not location_prefecture) and request.desiredLocations:
+        location_prefecture = request.desiredLocations[0]
+
+    salary_min = request.salary  # 単位はDBに合わせる（万円ならそのまま）
+
+    # ✅ UserモデルがUUID(user_id)を持つ可能性に備える
+    user_id_for_pref = getattr(current_user, "user_id", None) or str(current_user.id)
+
+    db.execute(
+        text("""
+            INSERT INTO user_preferences_profile
+                (user_id, job_title, location_prefecture, salary_min, updated_at)
+            VALUES
+                (:user_id, :job_title, :location_prefecture, :salary_min, :updated_at)
+            ON CONFLICT (user_id) DO UPDATE SET
+                job_title = EXCLUDED.job_title,
+                location_prefecture = EXCLUDED.location_prefecture,
+                salary_min = EXCLUDED.salary_min,
+                updated_at = EXCLUDED.updated_at
+        """),
+        {
+            "user_id": user_id_for_pref,
+            "job_title": job_title,
+            "location_prefecture": location_prefecture,
+            "salary_min": salary_min,
+            "updated_at": datetime.utcnow(),
+        }
+    )
 
     db.commit()
     db.refresh(current_user)
