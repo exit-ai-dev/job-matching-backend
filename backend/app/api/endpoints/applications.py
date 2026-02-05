@@ -19,6 +19,7 @@ from app.models.job import Job
 from app.models.user import UserRole
 from app.db.session import get_db
 from app.core.dependencies import CurrentUser
+from app.core.subscription import verify_subscription_limit
 
 router = APIRouter()
 
@@ -159,6 +160,9 @@ async def create_application(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="求職者のみ応募できます"
         )
+
+    # サブスクリプション制限チェック
+    await verify_subscription_limit("application_limit", db, current_user, increment=True)
 
     # 求人が存在するか確認
     job = db.query(Job).filter(Job.id == request.jobId).first()

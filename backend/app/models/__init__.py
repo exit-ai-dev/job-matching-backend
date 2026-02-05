@@ -11,6 +11,10 @@ from app.models.company import Company
 from app.models.company_profile import CompanyProfile
 from app.models.user_preferences import UserPreferencesProfile
 from app.models.conversation import ConversationSession, ConversationLog, ChatSession
+from app.models.subscription_plan import SubscriptionPlan, PlanTier
+from app.models.subscription import Subscription, SubscriptionStatus
+from app.models.usage_tracking import UsageTracking
+from app.models.payment_history import PaymentHistory, PaymentStatus
 
 __all__ = [
     # ユーザー関連
@@ -37,4 +41,12 @@ __all__ = [
     "ConversationSession",
     "ConversationLog",
     "ChatSession",
+    # サブスクリプション関連
+    "SubscriptionPlan",
+    "PlanTier",
+    "Subscription",
+    "SubscriptionStatus",
+    "UsageTracking",
+    "PaymentHistory",
+    "PaymentStatus",
 ]

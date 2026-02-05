@@ -20,6 +20,7 @@ from app.models.scout import Scout, ScoutStatus
 from app.models.user import User, UserRole
 from app.db.session import get_db
 from app.core.dependencies import CurrentUser
+from app.core.subscription import verify_subscription_limit
 
 router = APIRouter()
 
@@ -146,6 +147,9 @@ async def create_scout(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="企業アカウントのみがスカウトを送信できます"
         )
+
+    # サブスクリプション制限チェック
+    await verify_subscription_limit("scout_limit", db, current_user, increment=True)
 
     # 求職者が存在するか確認
     seeker = db.query(User).filter(

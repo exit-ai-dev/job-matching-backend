@@ -159,3 +159,24 @@ EmbeddingServiceDep = Annotated[EmbeddingService, Depends(get_embedding_service)
 MatchingServiceDep = Annotated[MatchingService, Depends(get_matching_service)]
 ConversationServiceDep = Annotated[ConversationService, Depends(get_conversation_service_dependency)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+# Re-export for convenience
+__all__ = [
+    "get_settings_dependency",
+    "get_db",
+    "get_current_user",
+    "get_openai_service",
+    "get_conversation_storage",
+    "get_vector_search_service",
+    "get_embedding_service",
+    "get_matching_service",
+    "get_conversation_service_dependency",
+    "SettingsDep",
+    "OpenAIServiceDep",
+    "ConversationStorageDep",
+    "VectorSearchServiceDep",
+    "EmbeddingServiceDep",
+    "MatchingServiceDep",
+    "ConversationServiceDep",
+    "CurrentUser",
+]

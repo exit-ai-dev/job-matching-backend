@@ -1,5 +1,5 @@
 # app/api/endpoints/conversation.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import logging
@@ -12,9 +12,13 @@ from app.core.dependencies import (
     OpenAIServiceDep,
     ConversationStorageDep,
     VectorSearchServiceDep,
-    SettingsDep
+    SettingsDep,
+    get_db,
+    get_current_user
 )
 from app.core.exceptions import OpenAIError, StorageError, NotFoundError
+from app.core.subscription import verify_subscription_limit
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,9 @@ async def chat(
     request: ChatRequest,
     openai_service: OpenAIServiceDep,
     storage: ConversationStorageDep,
-    settings: SettingsDep
+    settings: SettingsDep,
+    db=Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     会話型AIマッチング - チャットエンドポイント
@@ -55,6 +61,8 @@ async def chat(
     ユーザーとの会話を通じて求人条件を抽出し、最適な求人を提案します。
     """
     try:
+        # サブスクリプション制限チェック（AIチャット）
+        await verify_subscription_limit("ai_chat_limit", db, current_user, increment=True)
 
         # 会話IDの生成または取得
         conversation_id = request.conversation_id or str(uuid.uuid4())
