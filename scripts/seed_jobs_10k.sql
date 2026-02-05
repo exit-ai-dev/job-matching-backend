@@ -27,7 +27,14 @@ INSERT INTO jobs (
     updated_at
 )
 SELECT
-    gen_random_uuid()::text AS id,
+    lower(format(
+        '%s-%s-%s-%s-%s',
+        substr(md5(random()::text), 1, 8),
+        substr(md5(random()::text), 9, 4),
+        substr(md5(random()::text), 13, 4),
+        substr(md5(random()::text), 17, 4),
+        substr(md5(random()::text), 21, 12)
+    )) AS id,
     employer.employer_id AS employer_id,
     title_pool.title AS title,
     company_pool.company AS company,
@@ -37,7 +44,7 @@ SELECT
         stack_pool.primary_skill
     ) AS description,
     location_pool.location AS location,
-    employment_pool.employment_type AS employment_type,
+    employment_pool.employment_type::employmenttype AS employment_type,
     salary_pool.salary_min AS salary_min,
     salary_pool.salary_max AS salary_max,
     salary_pool.salary_text AS salary_text,
@@ -47,7 +54,7 @@ SELECT
     '社会保険完備 / 交通費支給 / 在宅手当' AS benefits,
     tags_pool.tags AS tags,
     remote_pool.remote AS remote,
-    'published' AS status,
+    'PUBLISHED'::jobstatus AS status,
     (random() < 0.05) AS featured,
     NULL AS embedding,
     jsonb_build_object('source', 'dummy_seed', 'batch', 'seed_jobs_10k')::text AS meta_data,
