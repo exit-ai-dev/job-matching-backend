@@ -69,15 +69,13 @@ _matching_service: MatchingService | None = None
 _conversation_service: ConversationService | None = None
 
 
-def get_embedding_service(
-    settings: Annotated[Settings, Depends(get_settings_dependency)]
-) -> EmbeddingService:
+def get_embedding_service() -> EmbeddingService:
     """EmbeddingServiceのシングルトンインスタンスを取得"""
     global _embedding_service
     if _embedding_service is None:
-        _embedding_service = EmbeddingService(
-            model_name=settings.openai_embedding_model
-        )
+        # SentenceTransformersのデフォルトモデルを使用
+        # (paraphrase-multilingual-MiniLM-L12-v2)
+        _embedding_service = EmbeddingService()
     return _embedding_service
 
 
