@@ -297,10 +297,19 @@ async def check_limit(
     limit_type: ai_chat_limit, application_limit, scout_limit, job_posting_limit, candidate_view_limit
     """
     try:
-        service = SubscriptionService(db)
-        result = service.check_limit(current_user.id, limit_type)
+        # TODO: 一時的にハードコーディングで全ユーザー許可（デバッグ用）
+        # 本番では以下のコメントを外してサービスを使用する
+        # service = SubscriptionService(db)
+        # result = service.check_limit(current_user.id, limit_type)
+        # return LimitCheckResponse(**result)
 
-        return LimitCheckResponse(**result)
+        # 一時的に全員許可
+        return LimitCheckResponse(
+            allowed=True,
+            current=0,
+            limit=-1,
+            remaining=-1
+        )
 
     except Exception as e:
         logger.error(f"Error checking limit: {e}")
