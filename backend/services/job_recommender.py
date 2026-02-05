@@ -60,10 +60,8 @@ class JobRecommender:
             location = (user_preferences.get('location') or '').strip()
             salary_min = user_preferences.get('salary_min') or 0
 
-            # salary_min の単位補正（万円が入ってくる可能性があるため）
-            # 例: 400(万円) -> 4,000,000(円)
-            if isinstance(salary_min, (int, float)) and 0 < salary_min < 100000:  # 10万未満なら「万円」っぽい
-                salary_min = int(salary_min * 10000)
+            # NOTE: This project stores salaries in *万円* (both user_preferences_profile and company_profile)
+            # so we must NOT convert to yen here. Converting would filter out all jobs.
 
             # --- 段階的に条件を緩める検索プラン ---
             # (title, location, salary) の順で緩める
@@ -90,7 +88,7 @@ class JobRecommender:
                         cp.company_id
                     FROM company_profile cp
                     LEFT JOIN company_date cd ON cp.company_id = cd.company_id
-                    WHERE cp.status = 'active'
+                    WHERE (cp.status = 'active' OR cp.status = 'published' OR cp.status IS NULL)
                 """
                 params: List[Any] = []
 
@@ -189,9 +187,8 @@ class JobRecommender:
             score += 8
 
         # 年収マッチ
+        # Salaries are stored in 万円. Do not convert.
         user_salary = user_preferences.get('salary_min') or 0
-        if isinstance(user_salary, (int, float)) and 0 < user_salary < 100000:
-            user_salary = int(user_salary * 10000)
 
         if user_salary and salary_max and salary_max >= user_salary:
             if salary_min and salary_min >= user_salary * 0.9:
