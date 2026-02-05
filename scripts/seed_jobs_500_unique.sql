@@ -141,14 +141,16 @@ CROSS JOIN LATERAL (
     SELECT jsonb_build_array(
         stack_pool.primary_skill,
         'Git',
-        'CI/CD'
+        'CI/CD',
+        format('req-%s', gs)
     )::text AS required_skills
 ) AS required_pool
 CROSS JOIN LATERAL (
     SELECT jsonb_build_array(
         'Kubernetes',
         'Terraform',
-        'Redis'
+        'Redis',
+        format('pref-%s', gs)
     )::text AS preferred_skills
 ) AS preferred_pool
 CROSS JOIN LATERAL (
