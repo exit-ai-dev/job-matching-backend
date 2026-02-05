@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from api.conversation_api import router as conversation_router
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
     print("🛑 FastAPI Job Matching System Shutting down...")
     print("=" * 60)
 
+app.include_router(conversation_router)
 
 # アプリケーション初期化
 app = FastAPI(
@@ -61,6 +63,8 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+app.include_router(conversation_router)
 
 # 静的ファイルとテンプレートの設定
 app.mount("/static", StaticFiles(directory="static"), name="static")
