@@ -112,10 +112,10 @@ CROSS JOIN LATERAL (
 ) AS location_pool
 CROSS JOIN LATERAL (
     SELECT unnest(ARRAY[
-        'full-time',
-        'part-time',
-        'contract',
-        'internship'
+        'FULL_TIME',
+        'PART_TIME',
+        'CONTRACT',
+        'INTERNSHIP'
     ]) AS employment_type
     ORDER BY random()
     LIMIT 1
