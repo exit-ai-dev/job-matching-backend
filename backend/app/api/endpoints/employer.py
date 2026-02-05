@@ -1,343 +1,556 @@
-# app/api/endpoints/conversation.py
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
-import logging
-import uuid
+# app/api/endpoints/employer.py
+"""
+企業向けAPIエンドポイント
+"""
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from datetime import datetime
+import uuid
 import json
-from pathlib import Path
 
-from app.core.dependencies import (
-    OpenAIServiceDep,
-    ConversationStorageDep,
-    VectorSearchServiceDep,
-    SettingsDep
-)
-from app.core.exceptions import OpenAIError, StorageError, NotFoundError
-
-logger = logging.getLogger(__name__)
+from app.db.session import get_db
+from app.models.user import User, UserRole
+from app.models.job import Job, JobStatus, EmploymentType
+from app.models.application import Application, ApplicationStatus
+from app.core.dependencies import CurrentUser
+from app.services.auth_service import AuthService
+from app.services.openai_service import get_openai_service
 
 router = APIRouter()
 
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
+# === リクエスト/レスポンスモデル ===
+
+class EmployerRegisterRequest(BaseModel):
+    """企業登録リクエスト"""
+    name: str
+    email: str
+    password: str
+    companyName: str
+    industry: Optional[str] = None
+
+
+class EmployerResponse(BaseModel):
+    """企業情報レスポンス"""
+    id: str
+    name: str
+    email: str
+    companyName: Optional[str] = None
+    description: Optional[str] = None
+    industry: Optional[str] = None
+    companySize: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    logoUrl: Optional[str] = None
+    createdAt: str
+    updatedAt: str
+
+
+class EmployerRegisterResponse(BaseModel):
+    """企業登録レスポンス"""
+    employer: EmployerResponse
+    token: str
+
+
+class JobCreateRequest(BaseModel):
+    """求人作成リクエスト"""
+    title: str
+    description: str
+    location: str
+    employmentType: str = Field(..., pattern="^(full-time|part-time|contract|internship)$")
+    salaryMin: Optional[int] = None
+    salaryMax: Optional[int] = None
+    requiredSkills: Optional[List[str]] = None
+    preferredSkills: Optional[List[str]] = None
+    requirements: Optional[str] = None
+    benefits: Optional[str] = None
+    status: str = Field(default="draft", pattern="^(draft|published|closed)$")
+
+
+class JobUpdateRequest(BaseModel):
+    """求人更新リクエスト"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    employmentType: Optional[str] = None
+    salaryMin: Optional[int] = None
+    salaryMax: Optional[int] = None
+    requiredSkills: Optional[List[str]] = None
+    preferredSkills: Optional[List[str]] = None
+    requirements: Optional[str] = None
+    benefits: Optional[str] = None
+    status: Optional[str] = None
+
+
+class JobResponse(BaseModel):
+    """求人レスポンス"""
+    id: str
+    employerId: str
+    title: str
+    description: str
+    location: str
+    employmentType: str
+    salaryMin: Optional[int] = None
+    salaryMax: Optional[int] = None
+    requiredSkills: Optional[List[str]] = None
+    preferredSkills: Optional[List[str]] = None
+    requirements: Optional[str] = None
+    benefits: Optional[str] = None
+    status: str
+    createdAt: str
+    updatedAt: str
+    applicationsCount: int = 0
+
+
+class JobListResponse(BaseModel):
+    """求人一覧レスポンス"""
+    items: List[JobResponse]
+    total: int
+    page: int
+    totalPages: int
 
 
 class ChatRequest(BaseModel):
-    user_id: str
+    """AI対話型ヒアリングリクエスト"""
+    jobId: Optional[str] = None
     message: str
-    conversation_id: Optional[str] = None
+    sessionId: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    """チャットメッセージ"""
+    id: str
+    role: str
+    content: str
+    timestamp: str
 
 
 class ChatResponse(BaseModel):
-    conversation_id: str
-    message: str
-    recommendations: Optional[List[Dict[str, Any]]] = None
+    """AI対話型ヒアリングレスポンス"""
+    sessionId: str
+    message: ChatMessage
+    isComplete: bool = False
 
 
-class ConversationHistoryResponse(BaseModel):
-    conversations: List[Dict[str, Any]]
+class DashboardStats(BaseModel):
+    """ダッシュボード統計"""
+    totalJobs: int
+    publishedJobs: int
+    draftJobs: int
+    closedJobs: int
+    totalApplications: int
+    pendingApplications: int
+    interviewApplications: int
+    offerApplications: int
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(
+# === ヘルパー関数 ===
+
+def job_to_response(job: Job, applications_count: int = 0) -> JobResponse:
+    """JobモデルをJobResponseに変換"""
+    required_skills = None
+    preferred_skills = None
+
+    if job.required_skills:
+        try:
+            required_skills = json.loads(job.required_skills)
+        except:
+            pass
+
+    if job.preferred_skills:
+        try:
+            preferred_skills = json.loads(job.preferred_skills)
+        except:
+            pass
+
+    return JobResponse(
+        id=job.id,
+        employerId=job.employer_id,
+        title=job.title,
+        description=job.description,
+        location=job.location,
+        employmentType=job.employment_type.value if job.employment_type else "full-time",
+        salaryMin=job.salary_min,
+        salaryMax=job.salary_max,
+        requiredSkills=required_skills,
+        preferredSkills=preferred_skills,
+        requirements=job.requirements,
+        benefits=job.benefits,
+        status=job.status.value if job.status else "draft",
+        createdAt=job.created_at.isoformat() if job.created_at else "",
+        updatedAt=job.updated_at.isoformat() if job.updated_at else "",
+        applicationsCount=applications_count
+    )
+
+
+def user_to_employer_response(user: User) -> EmployerResponse:
+    """UserモデルをEmployerResponseに変換"""
+    return EmployerResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        companyName=user.company_name,
+        description=user.company_description,
+        industry=user.industry,
+        companySize=user.company_size,
+        website=user.company_website,
+        location=user.company_location,
+        logoUrl=user.company_logo_url,
+        createdAt=user.created_at.isoformat() if user.created_at else "",
+        updatedAt=user.updated_at.isoformat() if user.updated_at else ""
+    )
+
+
+# === エンドポイント ===
+
+@router.post("/register", response_model=EmployerRegisterResponse, status_code=status.HTTP_201_CREATED)
+async def register_employer(
+    request: EmployerRegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """企業登録"""
+    auth_service = AuthService(db)
+
+    try:
+        user = auth_service.register(
+            email=request.email,
+            password=request.password,
+            name=request.name,
+            role="employer",
+            company_name=request.companyName,
+            industry=request.industry
+        )
+
+        token, _ = auth_service.create_access_token(user.id)
+
+        employer = user_to_employer_response(user)
+
+        return EmployerRegisterResponse(employer=employer, token=token)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.get("/me", response_model=EmployerResponse)
+async def get_current_employer(current_user: CurrentUser):
+    """現在の企業情報を取得"""
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみアクセス可能です"
+        )
+
+    return user_to_employer_response(current_user)
+
+
+@router.post("/jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
+async def create_job(
+    request: JobCreateRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
+):
+    """求人を作成"""
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみ求人を作成できます"
+        )
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        employer_id=current_user.id,
+        title=request.title,
+        description=request.description,
+        company=current_user.company_name or "",
+        location=request.location,
+        employment_type=EmploymentType(request.employmentType),
+        salary_min=request.salaryMin,
+        salary_max=request.salaryMax,
+        required_skills=json.dumps(request.requiredSkills) if request.requiredSkills else None,
+        preferred_skills=json.dumps(request.preferredSkills) if request.preferredSkills else None,
+        requirements=request.requirements,
+        benefits=request.benefits,
+        status=JobStatus(request.status),
+        posted_date=datetime.utcnow() if request.status == "published" else None
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return job_to_response(job)
+
+
+@router.get("/jobs", response_model=JobListResponse)
+async def get_employer_jobs(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+    status: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10
+):
+    """自社の求人一覧を取得"""
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみアクセス可能です"
+        )
+
+    query = db.query(Job).filter(Job.employer_id == current_user.id)
+
+    if status:
+        query = query.filter(Job.status == JobStatus(status))
+
+    total = query.count()
+    total_pages = (total + limit - 1) // limit
+
+    jobs = query.order_by(Job.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+
+    items = []
+    for job in jobs:
+        app_count = db.query(Application).filter(Application.job_id == job.id).count()
+        items.append(job_to_response(job, app_count))
+
+    return JobListResponse(
+        items=items,
+        total=total,
+        page=page,
+        totalPages=total_pages
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobResponse)
+async def get_job(
+    job_id: str,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
+):
+    """求人詳細を取得"""
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="求人が見つかりません"
+        )
+
+    if job.employer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この求人へのアクセス権限がありません"
+        )
+
+    app_count = db.query(Application).filter(Application.job_id == job.id).count()
+
+    return job_to_response(job, app_count)
+
+
+@router.put("/jobs/{job_id}", response_model=JobResponse)
+async def update_job(
+    job_id: str,
+    request: JobUpdateRequest,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
+):
+    """求人を更新"""
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="求人が見つかりません"
+        )
+
+    if job.employer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この求人の更新権限がありません"
+        )
+
+    if request.title is not None:
+        job.title = request.title
+    if request.description is not None:
+        job.description = request.description
+    if request.location is not None:
+        job.location = request.location
+    if request.employmentType is not None:
+        job.employment_type = EmploymentType(request.employmentType)
+    if request.salaryMin is not None:
+        job.salary_min = request.salaryMin
+    if request.salaryMax is not None:
+        job.salary_max = request.salaryMax
+    if request.requiredSkills is not None:
+        job.required_skills = json.dumps(request.requiredSkills)
+    if request.preferredSkills is not None:
+        job.preferred_skills = json.dumps(request.preferredSkills)
+    if request.requirements is not None:
+        job.requirements = request.requirements
+    if request.benefits is not None:
+        job.benefits = request.benefits
+    if request.status is not None:
+        old_status = job.status
+        job.status = JobStatus(request.status)
+        if old_status != JobStatus.PUBLISHED and job.status == JobStatus.PUBLISHED:
+            job.posted_date = datetime.utcnow()
+
+    db.commit()
+    db.refresh(job)
+
+    app_count = db.query(Application).filter(Application.job_id == job.id).count()
+
+    return job_to_response(job, app_count)
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job(
+    job_id: str,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
+):
+    """求人を削除"""
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="求人が見つかりません"
+        )
+
+    if job.employer_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="この求人の削除権限がありません"
+        )
+
+    db.delete(job)
+    db.commit()
+
+
+@router.post("/jobs/chat", response_model=ChatResponse)
+async def send_chat_message(
     request: ChatRequest,
-    openai_service: OpenAIServiceDep,
-    storage: ConversationStorageDep,
-    settings: SettingsDep
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
 ):
-    """
-    会話型AIマッチング - チャットエンドポイント
-
-    ユーザーとの会話を通じて求人条件を抽出し、最適な求人を提案します。
-    """
-    try:
-
-        # 会話IDの生成または取得
-        conversation_id = request.conversation_id or str(uuid.uuid4())
-
-        # 既存の会話履歴を読み込み
-        conversation_data = storage.load_conversation(request.user_id, conversation_id)
-
-        if conversation_data:
-            messages = conversation_data.get("messages", [])
-        else:
-            messages = []
-
-        # ユーザーメッセージを追加
-        messages.append({
-            "role": "user",
-            "content": request.message
-        })
-
-        # AIの応答を生成
-        ai_response = openai_service.generate_chat_response(messages)
-
-        # AIの応答を履歴に追加
-        messages.append({
-            "role": "assistant",
-            "content": ai_response
-        })
-
-        # 会話を保存
-        storage.save_conversation(
-            user_id=request.user_id,
-            conversation_id=conversation_id,
-            messages=messages,
-            metadata={
-                "created_at": conversation_data.get("created_at") if conversation_data else datetime.now().isoformat()
-            }
+    """AI対話型ヒアリング - メッセージを送信"""
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみアクセス可能です"
         )
 
-        # 一定のメッセージ数に達したら、条件を抽出して求人検索
-        recommendations = None
-        if len(messages) >= 2:  # 1往復以上の会話
-            try:
-                recommendations = await _extract_and_search_jobs(
-                    openai_service,
-                    storage,
-                    request.user_id,
-                    messages
-                )
-            except Exception as e:
-                logger.warning(f"Failed to extract preferences and search: {e}")
+    session_id = request.sessionId or str(uuid.uuid4())
 
-        return ChatResponse(
-            conversation_id=conversation_id,
-            message=ai_response,
-            recommendations=recommendations
-        )
+    openai_service = get_openai_service()
 
-    except Exception as e:
-        logger.error(f"Error in chat endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if openai_service.client:
+        try:
+            system_prompt = """あなたは求人作成をサポートするAIアシスタントです。
+企業の採用担当者から求人内容についてヒアリングを行い、魅力的な求人票の作成をサポートしてください。
+以下の点について質問しながら情報を収集してください：
+- 募集職種と仕事内容
+- 必要なスキルと経験
+- 勤務地と勤務形態
+- 給与・待遇
+- 会社の魅力や文化
 
+回答は簡潔に、200文字程度でお願いします。"""
 
-@router.get("/conversations/{user_id}", response_model=ConversationHistoryResponse)
-async def get_conversations(
-    user_id: str,
-    storage: ConversationStorageDep
-):
-    """
-    ユーザーの会話履歴を取得
-    """
-    try:
-        conversations = storage.get_user_conversations(user_id)
-        return ConversationHistoryResponse(conversations=conversations)
-
-    except StorageError as e:
-        logger.error(f"Storage error getting conversations: {e}")
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    except Exception as e:
-        logger.error(f"Error getting conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/conversations/{user_id}/{conversation_id}")
-async def delete_conversation(
-    user_id: str,
-    conversation_id: str,
-    storage: ConversationStorageDep
-):
-    """
-    会話を削除
-    """
-    try:
-        success = storage.delete_conversation(user_id, conversation_id)
-
-        if not success:
-            raise NotFoundError("Conversation not found")
-
-        return {"message": "Conversation deleted successfully"}
-
-    except NotFoundError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    except StorageError as e:
-        logger.error(f"Storage error deleting conversation: {e}")
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    except Exception as e:
-        logger.error(f"Error deleting conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class ExtractPreferencesRequest(BaseModel):
-    user_id: str
-    conversation_id: str
-
-
-class ExtractPreferencesResponse(BaseModel):
-    preferences: Dict[str, Any]
-    recommendations: List[Dict[str, Any]]
-
-
-@router.post("/extract-preferences", response_model=ExtractPreferencesResponse)
-async def extract_preferences(
-    request: ExtractPreferencesRequest,
-    openai_service: OpenAIServiceDep,
-    storage: ConversationStorageDep,
-    settings: SettingsDep
-):
-    """
-    会話から条件を抽出し、求人を検索
-    """
-    try:
-
-        # 会話履歴を読み込み
-        conversation_data = storage.load_conversation(
-            request.user_id,
-            request.conversation_id
-        )
-
-        if not conversation_data:
-            raise NotFoundError("Conversation not found")
-
-        messages = conversation_data.get("messages", [])
-
-        # 条件を抽出
-        preferences = openai_service.extract_job_preferences(messages)
-
-        # 求人を検索
-        recommendations = await _search_jobs_by_preferences(
-            openai_service,
-            storage,
-            request.user_id,
-            preferences
-        )
-
-        return ExtractPreferencesResponse(
-            preferences=preferences,
-            recommendations=recommendations
-        )
-
-    except NotFoundError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    except (OpenAIError, StorageError) as e:
-        logger.error(f"Service error extracting preferences: {e}")
-        raise HTTPException(status_code=e.status_code, detail=e.message)
-    except Exception as e:
-        logger.error(f"Error extracting preferences: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-async def _extract_and_search_jobs(
-    openai_service,
-    storage,
-    user_id: str,
-    messages: List[Dict[str, str]]
-) -> List[Dict[str, Any]]:
-    """会話から条件を抽出して求人を検索"""
-    try:
-        # 条件を抽出
-        preferences = openai_service.extract_job_preferences(messages)
-
-        # 求人を検索
-        return await _search_jobs_by_preferences(
-            openai_service,
-            storage,
-            user_id,
-            preferences
-        )
-
-    except Exception as e:
-        logger.error(f"Error in _extract_and_search_jobs: {e}")
-        return []
-
-
-async def _search_jobs_by_preferences(
-    openai_service,
-    storage,
-    user_id: str,
-    preferences: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """条件に基づいて求人を検索"""
-    try:
-        from app.services.vector_search import VectorSearchService
-
-        # 検索クエリのエンベディングを作成
-        query_embedding = openai_service.create_search_query_embedding(preferences)
-
-        # すべての求人エンベディングを取得
-        job_embeddings = storage.get_all_job_embeddings()
-
-        if not job_embeddings:
-            logger.warning("No job embeddings found. Initializing job embeddings...")
-            await _initialize_job_embeddings(openai_service, storage)
-            job_embeddings = storage.get_all_job_embeddings()
-
-        # 求人データを読み込み
-        job_data_list = _load_job_data()
-
-        # ベクトル検索
-        vector_search = VectorSearchService()
-        results = vector_search.weighted_search(
-            query_embedding=query_embedding,
-            job_embeddings=job_embeddings,
-            job_data_list=job_data_list,
-            preferences=preferences,
-            top_k=10
-        )
-
-        return _to_front_recommendations(results)
-
-    except Exception as e:
-        logger.error(f"Error in _search_jobs_by_preferences: {e}")
-        return []
-
-
-async def _initialize_job_embeddings(openai_service, storage):
-    """求人エンベディングを初期化"""
-    try:
-        from app.services.vector_search import VectorSearchService
-
-        job_data_list = _load_job_data()
-
-        for job in job_data_list:
-            # エンベディング用テキストを作成
-            text = VectorSearchService.create_job_embedding_text(job)
-
-            # エンベディングを生成
-            embedding = openai_service.create_embedding(text)
-
-            # 保存
-            storage.save_job_embedding(
-                job_id=job["id"],
-                embedding=embedding,
-                text=text
+            response = openai_service.client.chat.completions.create(
+                model=openai_service.chat_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": request.message}
+                ],
+                max_tokens=500,
+                temperature=0.7
             )
 
-        logger.info(f"Initialized embeddings for {len(job_data_list)} jobs")
+            reply_content = response.choices[0].message.content.strip()
 
-    except Exception as e:
-        logger.error(f"Error initializing job embeddings: {e}")
+        except Exception as e:
+            reply_content = f"申し訳ございません。AIとの通信でエラーが発生しました。"
+    else:
+        reply_content = "OpenAI APIが設定されていません。管理者にお問い合わせください。"
+
+    response_message = ChatMessage(
+        id=str(uuid.uuid4()),
+        role="assistant",
+        content=reply_content,
+        timestamp=datetime.utcnow().isoformat()
+    )
+
+    return ChatResponse(
+        sessionId=session_id,
+        message=response_message,
+        isComplete=False
+    )
 
 
-def _load_job_data() -> List[Dict[str, Any]]:
-    """求人データを読み込み"""
-    try:
-        data_file = Path("data/jobs.json")
+@router.get("/dashboard/stats", response_model=DashboardStats)
+async def get_dashboard_stats(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db)
+):
+    """ダッシュボードの統計情報を取得"""
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみアクセス可能です"
+        )
 
-        if not data_file.exists():
-            logger.warning("jobs.json not found")
-            return []
+    # 求人統計
+    total_jobs = db.query(Job).filter(Job.employer_id == current_user.id).count()
+    published_jobs = db.query(Job).filter(
+        Job.employer_id == current_user.id,
+        Job.status == JobStatus.PUBLISHED
+    ).count()
+    draft_jobs = db.query(Job).filter(
+        Job.employer_id == current_user.id,
+        Job.status == JobStatus.DRAFT
+    ).count()
+    closed_jobs = db.query(Job).filter(
+        Job.employer_id == current_user.id,
+        Job.status == JobStatus.CLOSED
+    ).count()
 
-        with open(data_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get("jobs", [])
+    # 応募統計（自社の求人への応募）
+    employer_job_ids = [j.id for j in db.query(Job.id).filter(Job.employer_id == current_user.id).all()]
 
-    except Exception as e:
-        logger.error(f"Error loading job data: {e}")
-        return []
-    
-def _to_front_recommendations(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out = []
-    for r in results or []:
-        out.append({
-            "id": str(r.get("id") or r.get("job_id") or ""),
-            "title": r.get("title") or r.get("job_title") or "",
-            "company": r.get("company") or r.get("company_name") or "非公開",
-            "matchScore": int(r.get("matchScore") or r.get("match_score") or 0),
-        })
-    return [x for x in out if x["id"] and x["title"]]
+    if employer_job_ids:
+        total_applications = db.query(Application).filter(
+            Application.job_id.in_(employer_job_ids)
+        ).count()
+        pending_applications = db.query(Application).filter(
+            Application.job_id.in_(employer_job_ids),
+            Application.status == ApplicationStatus.PENDING
+        ).count()
+        interview_applications = db.query(Application).filter(
+            Application.job_id.in_(employer_job_ids),
+            Application.status == ApplicationStatus.INTERVIEW
+        ).count()
+        offer_applications = db.query(Application).filter(
+            Application.job_id.in_(employer_job_ids),
+            Application.status == ApplicationStatus.OFFERED
+        ).count()
+    else:
+        total_applications = 0
+        pending_applications = 0
+        interview_applications = 0
+        offer_applications = 0
+
+    return DashboardStats(
+        totalJobs=total_jobs,
+        publishedJobs=published_jobs,
+        draftJobs=draft_jobs,
+        closedJobs=closed_jobs,
+        totalApplications=total_applications,
+        pendingApplications=pending_applications,
+        interviewApplications=interview_applications,
+        offerApplications=offer_applications
+    )
