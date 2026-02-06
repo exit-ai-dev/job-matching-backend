@@ -200,7 +200,7 @@ class EmployerChatService:
                 for i, skill in enumerate(requirements["skills"][:5]):
                     # usersテーブルのskillsカラムのみ検索
                     skill_conditions.append(
-                        f"(u.skills IS NOT NULL AND u.skills::text ILIKE %(skill_pattern_{i})s)"
+                        f"(u.skills IS NOT NULL AND u.skills::text ILIKE :skill_pattern_{i})"
                     )
                     params[f"skill_pattern_{i}"] = f"%{skill}%"
                 
@@ -209,7 +209,7 @@ class EmployerChatService:
 
             # 職種フィルター
             if requirements.get("job_title"):
-                query += " AND upp.job_title ILIKE %(job_title)s"
+                query += " AND upp.job_title ILIKE :job_title"
                 params["job_title"] = f"%{requirements['job_title']}%"
 
             # リモートワークフィルター
@@ -220,7 +220,7 @@ class EmployerChatService:
 
             # 勤務地フィルター
             if requirements.get("location"):
-                query += " AND (upp.location_prefecture ILIKE %(location)s OR upp.location_city ILIKE %(location)s)"
+                query += " AND (upp.location_prefecture ILIKE :location OR upp.location_city ILIKE :location)"
                 params["location"] = f"%{requirements['location']}%"
 
             query += " LIMIT 20"
