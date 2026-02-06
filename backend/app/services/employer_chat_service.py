@@ -193,7 +193,7 @@ class EmployerChatService:
                 FROM users u
                 LEFT JOIN resumes r ON u.id = r.user_id
                 LEFT JOIN user_preferences_profile upp ON u.id = upp.user_id
-                WHERE u.role = 'seeker'
+                WHERE u.role = 'SEEKER'
                   AND u.is_active = true
             """
 
