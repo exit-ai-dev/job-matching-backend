@@ -31,13 +31,11 @@ router = APIRouter()
 def get_status_color(status: ApplicationStatus) -> str:
     """ステータスに対応する色を取得"""
     colors = {
-        ApplicationStatus.PENDING: "yellow",
         ApplicationStatus.SCREENING: "yellow",
         ApplicationStatus.INTERVIEW: "blue",
         ApplicationStatus.OFFERED: "green",
         ApplicationStatus.REJECTED: "red",
         ApplicationStatus.WITHDRAWN: "gray",
-        ApplicationStatus.ACCEPTED: "green",
     }
     return colors.get(status, "gray")
 
@@ -378,7 +376,12 @@ async def update_application(
     # 更新
     if request.status:
         try:
-            application.status = ApplicationStatus(request.status.upper())
+            status_value = request.status.upper()
+            if status_value == "PENDING":
+                status_value = "SCREENING"
+            if status_value == "ACCEPTED":
+                status_value = "OFFERED"
+            application.status = ApplicationStatus(status_value)
             application.status_color = get_status_color(application.status)
         except ValueError:
             raise HTTPException(
