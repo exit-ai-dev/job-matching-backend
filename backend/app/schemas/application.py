@@ -19,6 +19,7 @@ class ApplicationCreate(BaseModel):
 class ApplicationUpdate(BaseModel):
     """応募更新リクエスト"""
     status: Optional[str] = None
+    statusDetail: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -70,4 +71,39 @@ class ApplicationDetail(BaseModel):
 class ApplicationListResponse(BaseModel):
     """応募一覧レスポンス"""
     applications: list[ApplicationItem]
+    total: int
+
+
+class EmployerApplicationItem(BaseModel):
+    """企業向け応募項目"""
+    applicationId: str
+    seekerId: str
+    seekerName: str
+    jobId: str
+    jobTitle: str
+    company: str
+    location: str
+    salary: str
+    matchScore: Optional[int] = None
+    status: str
+    statusDetail: Optional[str] = None
+    statusColor: str
+    appliedDate: str
+    lastUpdate: str
+    desiredLocation: Optional[str] = None
+    desiredSalary: Optional[str] = None
+    desiredEmploymentType: Optional[str] = None
+    experienceYears: Optional[str] = None
+    profileCompletion: Optional[str] = None
+    skills: list[str]
+    hasResume: bool
+    documents: dict
+
+    class Config:
+        from_attributes = True
+
+
+class EmployerApplicationListResponse(BaseModel):
+    """企業向け応募一覧レスポンス"""
+    applications: list[EmployerApplicationItem]
     total: int

@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime
+import json
 
 from app.schemas.application import (
     ApplicationCreate,
@@ -13,13 +14,16 @@ from app.schemas.application import (
     ApplicationItem,
     ApplicationDetail,
     ApplicationListResponse,
+    EmployerApplicationItem,
+    EmployerApplicationListResponse,
 )
 from app.models.application import Application, ApplicationStatus
 from app.models.job import Job
-from app.models.user import UserRole
+from app.models.user import UserRole, User
 from app.db.session import get_db
 from app.core.dependencies import CurrentUser
 from app.core.subscription import verify_subscription_limit
+from app.repositories.resume_repository import ResumeRepository
 
 router = APIRouter()
 
@@ -133,6 +137,85 @@ async def get_applications(
             items.append(application_to_item(application, job))
 
     return ApplicationListResponse(
+        applications=items,
+        total=len(items),
+    )
+
+
+@router.get("/employer", response_model=EmployerApplicationListResponse)
+async def get_employer_applications(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    """
+    企業向け応募一覧を取得
+    """
+    if current_user.role != UserRole.EMPLOYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="企業ユーザーのみアクセス可能です"
+        )
+
+    applications = db.query(Application).order_by(Application.applied_at.desc()).all()
+    resume_repo = ResumeRepository(db)
+    items = []
+
+    for application in applications:
+        job = db.query(Job).filter(Job.id == application.job_id).first()
+        if not job or job.employer_id != current_user.id:
+            continue
+
+        seeker = db.query(User).filter(User.id == application.seeker_id).first()
+        if not seeker:
+            continue
+
+        skills = []
+        if seeker.skills:
+            try:
+                skills = json.loads(seeker.skills)
+            except Exception:
+                skills = [seeker.skills]
+
+        desired_salary = ""
+        if seeker.desired_salary_min and seeker.desired_salary_max:
+            desired_salary = f"{seeker.desired_salary_min}万円〜{seeker.desired_salary_max}万円"
+        elif seeker.desired_salary_min:
+            desired_salary = f"{seeker.desired_salary_min}万円〜"
+
+        salary = job.salary_text or ""
+        if not salary and job.salary_min and job.salary_max:
+            salary = f"{job.salary_min}万円～{job.salary_max}万円"
+
+        items.append(EmployerApplicationItem(
+            applicationId=application.id,
+            seekerId=seeker.id,
+            seekerName=seeker.name,
+            jobId=job.id,
+            jobTitle=job.title,
+            company=job.company,
+            location=job.location,
+            salary=salary,
+            matchScore=application.match_score,
+            status=application.status.value,
+            statusDetail=application.status_detail,
+            statusColor=application.status_color or get_status_color(application.status),
+            appliedDate=application.applied_at.strftime("%Y-%m-%d") if application.applied_at else "",
+            lastUpdate=application.updated_at.strftime("%Y-%m-%d") if application.updated_at else "",
+            desiredLocation=seeker.desired_location,
+            desiredSalary=desired_salary,
+            desiredEmploymentType=seeker.desired_employment_type,
+            experienceYears=seeker.experience_years,
+            profileCompletion=seeker.profile_completion,
+            skills=skills[:5] if isinstance(skills, list) else [],
+            hasResume=resume_repo.exists_for_user(seeker.id),
+            documents={
+                "resume": application.resume_submitted == "true",
+                "portfolio": application.portfolio_submitted == "true",
+                "coverLetter": bool(application.cover_letter),
+            }
+        ))
+
+    return EmployerApplicationListResponse(
         applications=items,
         total=len(items),
     )
@@ -302,6 +385,9 @@ async def update_application(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="無効なステータスです"
             )
+
+    if request.statusDetail is not None:
+        application.status_detail = request.statusDetail
 
     if request.notes is not None:
         application.notes = request.notes
