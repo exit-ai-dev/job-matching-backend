@@ -102,20 +102,20 @@ async def chat(
         recommendations = None
         if result.should_show_jobs and result.jobs:
             if current_user.role == UserRole.EMPLOYER:
-                # 企業向け: 候補者リスト
+                # 企業向け: JobRecommendation形式
                 recommendations = [
                     JobRecommendationResponse(
-                        id=candidate.get("id", ""),
-                        title=candidate.get("job_title", "職種未設定"),
-                        company=candidate.get("name", "名前未設定"),  # 候補者名をcompanyフィールドに
-                        matchScore=int(candidate.get("matchScore", 0)),
-                        matchReasoning=candidate.get("matchReasoning", ""),
-                        salaryMin=None,
-                        salaryMax=None,
-                        location=candidate.get("location", "未設定"),
-                        remoteOption=candidate.get("remote_option", "未設定")
+                        id=job.job_id,
+                        title=job.job_title,
+                        company=job.company_name,  # 候補者名がここに入る
+                        matchScore=int(job.match_score),
+                        matchReasoning=job.match_reasoning,
+                        salaryMin=job.salary_min,
+                        salaryMax=job.salary_max,
+                        location=job.location,
+                        remoteOption=job.remote_option
                     )
-                    for candidate in result.jobs
+                    for job in result.jobs
                 ]
             else:
                 # 求職者向け: 求人リスト
