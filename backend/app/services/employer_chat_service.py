@@ -188,7 +188,7 @@ class EmployerChatService:
                     u.experience_years
                 FROM users u
                 LEFT JOIN user_preferences_profile upp ON u.id = upp.user_id
-                WHERE u.role = 'SEEKER'
+                WHERE lower(u.role::text) = 'seeker'
                   AND u.is_active = true
             """
 
