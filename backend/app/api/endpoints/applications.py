@@ -189,7 +189,7 @@ async def create_application(
         id=str(uuid.uuid4()),
         seeker_id=current_user.id,
         job_id=request.jobId,
-        status=ApplicationStatus.PENDING,
+        status=ApplicationStatus.SCREENING,
         status_detail="書類選考中",
         status_color="yellow",
         message=request.message,
@@ -295,7 +295,7 @@ async def update_application(
     # 更新
     if request.status:
         try:
-            application.status = ApplicationStatus(request.status)
+            application.status = ApplicationStatus(request.status.upper())
             application.status_color = get_status_color(application.status)
         except ValueError:
             raise HTTPException(
