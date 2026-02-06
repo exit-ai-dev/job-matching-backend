@@ -18,8 +18,9 @@ from app.core.dependencies import (
 )
 from app.core.exceptions import OpenAIError, StorageError, NotFoundError
 from app.core.subscription import verify_subscription_limit
-from app.models.user import User
-from app.services.chat_service import ChatService 
+from app.models.user import User, UserRole
+from app.services.chat_service import ChatService
+from app.services.employer_chat_service import EmployerChatService
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,25 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
 
 
+class JobRecommendationResponse(BaseModel):
+    """求人推薦レスポンス"""
+    id: str
+    title: str
+    company: str
+    matchScore: int
+    matchReasoning: str = ""
+    salaryMin: Optional[int] = None
+    salaryMax: Optional[int] = None
+    location: str = ""
+    remoteOption: str = ""
+
+
 class ChatResponse(BaseModel):
+    ai_message: str
+    recommendations: Optional[List[JobRecommendationResponse]] = None
     conversation_id: str
-    message: str
-    recommendations: Optional[List[Dict[str, Any]]] = None
+    turn_number: int
+    current_score: float
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -50,7 +66,6 @@ class ConversationHistoryResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    openai_service: OpenAIServiceDep,
     storage: ConversationStorageDep,
     settings: SettingsDep,
     db=Depends(get_db),
@@ -58,70 +73,79 @@ async def chat(
 ):
     """
     会話型AIマッチング - チャットエンドポイント
-
-    ユーザーとの会話を通じて求人条件を抽出し、最適な求人を提案します。
+    
+    求職者: 求人条件を抽出して最適な求人を提案
+    企業: 候補者要件を抽出して最適な候補者を提案
     """
     try:
         # サブスクリプション制限チェック（AIチャット）
         await verify_subscription_limit("ai_chat_limit", db, current_user, increment=True)
 
-        # 会話IDの生成または取得
-        conversation_id = request.conversation_id or str(uuid.uuid4())
-
-        # 既存の会話履歴を読み込み
-        conversation_data = storage.load_conversation(request.user_id, conversation_id)
-
-        if conversation_data:
-            messages = conversation_data.get("messages", [])
+        # ユーザーの役割に応じてサービスを切り替え
+        if current_user.role == UserRole.EMPLOYER:
+            # 企業の場合: 候補者検索サービス
+            logger.info(f"[Employer Chat] Processing message for employer: {current_user.id}")
+            chat_service = EmployerChatService()
         else:
-            messages = []
+            # 求職者の場合: 求人検索サービス
+            logger.info(f"[Seeker Chat] Processing message for seeker: {current_user.id}")
+            chat_service = ChatService()
 
-        # ユーザーメッセージを追加
-        messages.append({
-            "role": "user",
-            "content": request.message
-        })
-
-        # AIの応答を生成
-        ai_response = openai_service.generate_chat_response(messages)
-
-        # AIの応答を履歴に追加
-        messages.append({
-            "role": "assistant",
-            "content": ai_response
-        })
-
-        # 会話を保存
-        storage.save_conversation(
+        # メッセージ処理
+        result = chat_service.process_message(
             user_id=request.user_id,
-            conversation_id=conversation_id,
-            messages=messages,
-            metadata={
-                "created_at": conversation_data.get("created_at") if conversation_data else datetime.now().isoformat()
-            }
+            user_message=request.message,
+            session_id=request.conversation_id
         )
 
-        # 一定のメッセージ数に達したら、条件を抽出して求人検索
+        # レスポンス変換
         recommendations = None
-        if len(messages) >= 2:  # 1往復以上の会話
-            try:
-                recommendations = await _extract_and_search_jobs(
-                    openai_service,
-                    storage,
-                    request.user_id,
-                    messages
-                )
-            except Exception as e:
-                logger.warning(f"Failed to extract preferences and search: {e}")
+        if result.should_show_jobs and result.jobs:
+            if current_user.role == UserRole.EMPLOYER:
+                # 企業向け: 候補者リスト
+                recommendations = [
+                    JobRecommendationResponse(
+                        id=candidate.get("id", ""),
+                        title=candidate.get("job_title", "職種未設定"),
+                        company=candidate.get("name", "名前未設定"),  # 候補者名をcompanyフィールドに
+                        matchScore=int(candidate.get("matchScore", 0)),
+                        matchReasoning=candidate.get("matchReasoning", ""),
+                        salaryMin=None,
+                        salaryMax=None,
+                        location=candidate.get("location", "未設定"),
+                        remoteOption=candidate.get("remote_option", "未設定")
+                    )
+                    for candidate in result.jobs
+                ]
+            else:
+                # 求職者向け: 求人リスト
+                recommendations = [
+                    JobRecommendationResponse(
+                        id=job.job_id,
+                        title=job.job_title,
+                        company=job.company_name,
+                        matchScore=int(job.match_score),
+                        matchReasoning=job.match_reasoning,
+                        salaryMin=job.salary_min,
+                        salaryMax=job.salary_max,
+                        location=job.location,
+                        remoteOption=job.remote_option
+                    )
+                    for job in result.jobs
+                ]
 
         return ChatResponse(
-            conversation_id=conversation_id,
-            message=ai_response,
-            recommendations=recommendations
+            ai_message=result.ai_message,
+            recommendations=recommendations,
+            conversation_id=result.session_id,
+            turn_number=result.turn_count,
+            current_score=result.current_score
         )
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -129,7 +153,8 @@ async def chat(
 async def get_conversations(
     user_id: str,
     storage: ConversationStorageDep,
-    db=Depends(get_db)
+    db=Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     ユーザーの会話履歴を取得
@@ -141,8 +166,14 @@ async def get_conversations(
         # 履歴がない場合、動的な初回メッセージを生成
         if not conversations or len(conversations) == 0:
             try:
-                # ChatServiceで初回メッセージを生成
-                chat_service = ChatService()
+                # ユーザーの役割に応じてサービスを切り替え
+                if current_user.role == UserRole.EMPLOYER:
+                    logger.info(f"[Employer Chat] Starting chat for employer: {current_user.id}")
+                    chat_service = EmployerChatService()
+                else:
+                    logger.info(f"[Seeker Chat] Starting chat for seeker: {current_user.id}")
+                    chat_service = ChatService()
+                
                 result = chat_service.start_chat(user_id=user_id)
                 
                 # 新規会話オブジェクトを作成
