@@ -11,21 +11,13 @@ from app.db.base import Base
 
 class ApplicationStatus(str, enum.Enum):
     """応募ステータス"""
-    PENDING = "pending"  # 応募受付中
-    SCREENING = "screening"  # 書類選考中
-    INTERVIEW = "interview"  # 面接予定・面接中
-    OFFERED = "offered"  # 内定
-    ACCEPTED = "accepted"  # 内定承諾
-    REJECTED = "rejected"  # 不合格
-    WITHDRAWN = "withdrawn"  # 辞退
-
-
-# SQLAlchemy EnumがEnum名("PENDING")ではなく値("pending")を保存するようにする
-_application_status_enum = Enum(
-    ApplicationStatus,
-    values_callable=lambda enum_cls: [e.value for e in enum_cls],
-    name="applicationstatus",
-)
+    PENDING = "PENDING"  # 応募受付中
+    SCREENING = "SCREENING"  # 書類選考中
+    INTERVIEW = "INTERVIEW"  # 面接予定・面接中
+    OFFERED = "OFFERED"  # 内定
+    ACCEPTED = "ACCEPTED"  # 内定承諾
+    REJECTED = "REJECTED"  # 不合格
+    WITHDRAWN = "WITHDRAWN"  # 辞退
 
 
 class Application(Base):
@@ -37,7 +29,7 @@ class Application(Base):
     job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
 
     # ステータス
-    status = Column(_application_status_enum, default=ApplicationStatus.SCREENING, nullable=False)
+    status = Column(Enum(ApplicationStatus), default=ApplicationStatus.SCREENING, nullable=False)
     status_detail = Column(String(100), nullable=True)  # 「一次面接待ち」など
     status_color = Column(String(20), default="yellow", nullable=True)  # UI表示用
 
