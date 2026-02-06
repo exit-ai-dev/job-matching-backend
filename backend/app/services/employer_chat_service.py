@@ -1,10 +1,12 @@
 """
-企業向け候補者検索チャットサービス
+企業向け候補者検索チャットサービス（DB構造修正版）
+実際のDBスキーマ: users, resumes, user_preferences_profile
 """
 
 from typing import Optional, List, Dict, Any
 import json
 import os
+import re
 from app.models.chat_models import ChatTurnResult
 from app.utils.session_manager import SessionManager
 from openai import OpenAI
@@ -17,16 +19,7 @@ class EmployerChatService:
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def start_chat(self, employer_id: str) -> ChatTurnResult:
-        """
-        候補者検索チャット開始
-
-        Args:
-            employer_id: 企業ID
-
-        Returns:
-            ChatTurnResult: 初回メッセージ
-        """
-        # セッション作成
+        """候補者検索チャット開始"""
         session = SessionManager.create_session(employer_id, {})
 
         initial_message = (
@@ -39,7 +32,6 @@ class EmployerChatService:
             "• その他の条件"
         )
 
-        # セッションに記録
         SessionManager.add_turn(
             session=session,
             user_message="[初回接続]",
@@ -63,18 +55,7 @@ class EmployerChatService:
         user_message: str,
         session_id: Optional[str] = None
     ) -> ChatTurnResult:
-        """
-        企業のメッセージを処理して候補者を検索
-
-        Args:
-            employer_id: 企業ID
-            user_message: 企業のメッセージ
-            session_id: セッションID
-
-        Returns:
-            ChatTurnResult: 候補者リストと応答
-        """
-        # セッション取得または作成
+        """企業のメッセージを処理して候補者を検索"""
         if session_id:
             session = SessionManager.get_session(session_id)
             if not session:
@@ -105,7 +86,6 @@ class EmployerChatService:
             new_score=0.0
         )
 
-        # 5. 結果を返す
         return ChatTurnResult(
             ai_message=ai_message,
             current_score=0.0,
@@ -115,36 +95,15 @@ class EmployerChatService:
             session_id=session.session_id
         )
 
-    def _extract_requirements(
-        self,
-        user_message: str,
-        session
-    ) -> Dict[str, Any]:
-        """
-        企業のメッセージから求める候補者の要件を抽出
-
-        Args:
-            user_message: ユーザーメッセージ
-            session: セッション
-
-        Returns:
-            Dict: 抽出された要件
-        """
-        # 会話履歴を構築
+    def _extract_requirements(self, user_message: str, session) -> Dict[str, Any]:
+        """企業のメッセージから求める候補者の要件を抽出"""
         conversation_history = []
-        for turn in session.conversation_history[-5:]:  # 直近5ターン
+        for turn in session.conversation_history[-5:]:
             if turn.get("user"):
-                conversation_history.append({
-                    "role": "user",
-                    "content": turn["user"]
-                })
+                conversation_history.append({"role": "user", "content": turn["user"]})
             if turn.get("ai"):
-                conversation_history.append({
-                    "role": "assistant",
-                    "content": turn["ai"]
-                })
+                conversation_history.append({"role": "assistant", "content": turn["ai"]})
 
-        # AIで要件抽出
         system_prompt = """あなたは採用担当者のアシスタントです。
 企業が求める候補者の要件を分析してください。
 
@@ -159,23 +118,17 @@ class EmployerChatService:
   "other_requirements": "その他の要件の説明"
 }"""
 
-        messages = conversation_history + [
-            {"role": "user", "content": user_message}
-        ]
-
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt}
-                ] + messages,
+                messages=[{"role": "system", "content": system_prompt}] + 
+                         conversation_history + 
+                         [{"role": "user", "content": user_message}],
                 temperature=0.3,
                 max_tokens=500
             )
 
             content = response.choices[0].message.content.strip()
-            
-            # JSONを抽出（```json ``` で囲まれている場合に対応）
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -187,7 +140,6 @@ class EmployerChatService:
 
         except Exception as e:
             print(f"[EmployerChatService] Error extracting requirements: {e}")
-            # フォールバック：基本的なキーワード抽出
             return {
                 "skills": [],
                 "experience_years": None,
@@ -198,63 +150,57 @@ class EmployerChatService:
                 "other_requirements": user_message
             }
 
-    def _search_candidates(
-        self,
-        requirements: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """
-        要件に基づいて候補者を検索
-
-        Args:
-            requirements: 抽出された要件
-
-        Returns:
-            List[Dict]: 候補者リスト
-        """
+    def _search_candidates(self, requirements: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """要件に基づいて候補者を検索（実際のDBスキーマ対応）"""
         from app.db.session import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         
         try:
-            # 基本的な候補者検索クエリ
+            # 実際のテーブル構造
+            # users: id, name, role, skills, experience_years
+            # resumes: user_id, skills, experience
+            # user_preferences_profile: user_id, job_title, location_prefecture, location_city, remote_work_preference
+            
             query = """
                 SELECT 
-                    pd.user_id as id,
-                    pd.name,
-                    up.job_title,
-                    up.years_of_experience as experience_years,
-                    up.skills,
-                    CONCAT(up.location_prefecture, up.location_city) as location,
-                    upp.remote_work_preference
-                FROM personal_date pd
-                LEFT JOIN user_profile up ON pd.user_id = up.user_id
-                LEFT JOIN user_preferences_profile upp ON pd.user_id = upp.user_id
-                WHERE 1=1
+                    u.id,
+                    u.name,
+                    r.skills as resume_skills,
+                    u.skills as user_skills,
+                    upp.job_title,
+                    upp.location_prefecture,
+                    upp.location_city,
+                    upp.remote_work_preference,
+                    r.experience,
+                    u.experience_years,
+                    r.summary
+                FROM users u
+                LEFT JOIN resumes r ON u.id = r.user_id
+                LEFT JOIN user_preferences_profile upp ON u.id = upp.user_id
+                WHERE u.role = 'seeker'
+                  AND u.is_active = true
             """
 
             params = {}
 
             # スキルフィルター
             if requirements.get("skills"):
-                # スキル配列に対する検索（PostgreSQL配列演算子使用）
                 skill_conditions = []
-                for i, skill in enumerate(requirements["skills"][:5]):  # 最大5つ
-                    param_name = f"skill_{i}"
-                    skill_conditions.append(f"%({param_name})s = ANY(up.skills)")
-                    params[param_name] = skill
+                for i, skill in enumerate(requirements["skills"][:5]):
+                    # resumesテーブルとusersテーブルの両方からスキルを検索
+                    skill_conditions.append(
+                        f"(r.skills::text ILIKE %(skill_pattern_{i})s OR u.skills::text ILIKE %(skill_pattern_{i})s)"
+                    )
+                    params[f"skill_pattern_{i}"] = f"%{skill}%"
                 
                 if skill_conditions:
                     query += f" AND ({' OR '.join(skill_conditions)})"
 
-            # 経験年数フィルター
-            if requirements.get("experience_years"):
-                query += " AND up.years_of_experience >= %(min_years)s"
-                params["min_years"] = requirements["experience_years"]
-
             # 職種フィルター
             if requirements.get("job_title"):
-                query += " AND up.job_title ILIKE %(job_title)s"
+                query += " AND upp.job_title ILIKE %(job_title)s"
                 params["job_title"] = f"%{requirements['job_title']}%"
 
             # リモートワークフィルター
@@ -263,40 +209,99 @@ class EmployerChatService:
                 if "リモート" in remote_pref or "在宅" in remote_pref or "remote" in remote_pref:
                     query += " AND upp.remote_work_preference IN ('フルリモート', 'リモート可')"
 
+            # 勤務地フィルター
+            if requirements.get("location"):
+                query += " AND (upp.location_prefecture ILIKE %(location)s OR upp.location_city ILIKE %(location)s)"
+                params["location"] = f"%{requirements['location']}%"
+
             query += " LIMIT 20"
 
             print(f"[EmployerChatService] Executing query with params: {params}")
+            
             result = db.execute(text(query), params)
             candidates = []
 
             for row in result:
-                # マッチスコアを計算（簡易版）
+                # スキルの解析（resumeまたはuserから）
+                skills = []
+                skills_source = row.resume_skills or row.user_skills
+                if skills_source:
+                    try:
+                        skills = json.loads(skills_source) if isinstance(skills_source, str) else skills_source
+                        if not isinstance(skills, list):
+                            skills = [str(skills_source)]
+                    except:
+                        skills = [s.strip() for s in str(skills_source).split(',') if s.strip()]
+
+                # 経験年数の推定
+                experience_years = 0
+                if row.experience_years:
+                    try:
+                        exp_str = str(row.experience_years)
+                        if exp_str.isdigit():
+                            experience_years = int(exp_str)
+                        else:
+                            # "3年" のような形式から数値を抽出
+                            years_match = re.search(r'(\d+)', exp_str)
+                            if years_match:
+                                experience_years = int(years_match.group(1))
+                    except:
+                        pass
+
+                # experienceフィールドからも経験年数を取得を試みる
+                if experience_years == 0 and row.experience:
+                    years_match = re.search(r'(\d+)\s*年', str(row.experience))
+                    if years_match:
+                        experience_years = int(years_match.group(1))
+
+                # 経験年数フィルター
+                if requirements.get("experience_years"):
+                    if experience_years < requirements["experience_years"]:
+                        continue
+
+                # マッチスコア計算
                 match_score = self._calculate_match_score(
-                    dict(row._mapping),
+                    {
+                        "skills": skills,
+                        "job_title": row.job_title,
+                        "experience_years": experience_years,
+                        "remote_work_preference": row.remote_work_preference
+                    },
                     requirements
                 )
+
+                # 勤務地
+                location_parts = []
+                if row.location_prefecture:
+                    location_parts.append(row.location_prefecture)
+                if row.location_city:
+                    location_parts.append(row.location_city)
+                location = "".join(location_parts) if location_parts else "未設定"
 
                 candidate = {
                     "id": str(row.id),
                     "name": row.name or "名前未設定",
                     "job_title": row.job_title or "職種未設定",
-                    "experience_years": row.experience_years,
-                    "skills": row.skills if row.skills else [],
-                    "location": row.location or "未設定",
+                    "experience_years": experience_years,
+                    "skills": skills,
+                    "location": location,
                     "remote_option": row.remote_work_preference or "未設定",
                     "matchScore": match_score,
                     "matchReasoning": self._generate_match_reasoning(
-                        dict(row._mapping),
+                        {
+                            "skills": skills,
+                            "job_title": row.job_title,
+                            "experience_years": experience_years
+                        },
                         requirements
                     )
                 }
                 candidates.append(candidate)
 
-            # マッチスコア順にソート
             candidates.sort(key=lambda x: x["matchScore"], reverse=True)
             
             print(f"[EmployerChatService] Found {len(candidates)} candidates")
-            return candidates[:10]  # 上位10名
+            return candidates[:10]
 
         except Exception as e:
             print(f"[EmployerChatService] Error searching candidates: {e}")
@@ -306,21 +311,8 @@ class EmployerChatService:
         finally:
             db.close()
 
-    def _calculate_match_score(
-        self,
-        candidate: Dict[str, Any],
-        requirements: Dict[str, Any]
-    ) -> int:
-        """
-        候補者のマッチスコアを計算
-
-        Args:
-            candidate: 候補者情報
-            requirements: 要件
-
-        Returns:
-            int: マッチスコア（0-100）
-        """
+    def _calculate_match_score(self, candidate: Dict[str, Any], requirements: Dict[str, Any]) -> int:
+        """候補者のマッチスコアを計算"""
         score = 60  # ベーススコア
 
         # スキルマッチ
@@ -344,21 +336,8 @@ class EmployerChatService:
 
         return min(score, 100)
 
-    def _generate_match_reasoning(
-        self,
-        candidate: Dict[str, Any],
-        requirements: Dict[str, Any]
-    ) -> str:
-        """
-        マッチング理由を生成
-
-        Args:
-            candidate: 候補者情報
-            requirements: 要件
-
-        Returns:
-            str: マッチング理由
-        """
+    def _generate_match_reasoning(self, candidate: Dict[str, Any], requirements: Dict[str, Any]) -> str:
+        """マッチング理由を生成"""
         reasons = []
 
         # スキルマッチ
@@ -378,37 +357,18 @@ class EmployerChatService:
         # 職種
         if requirements.get("job_title") and candidate.get("job_title"):
             if requirements["job_title"].lower() in candidate["job_title"].lower():
-                reasons.append(f"職種一致")
+                reasons.append("職種一致")
 
-        if not reasons:
-            return "候補者として推薦"
+        return " / ".join(reasons) if reasons else "候補者として推薦"
 
-        return " / ".join(reasons)
-
-    def _generate_response(
-        self,
-        requirements: Dict[str, Any],
-        candidates: List[Dict[str, Any]],
-        candidate_count: int
-    ) -> str:
-        """
-        AIの応答メッセージを生成
-
-        Args:
-            requirements: 抽出された要件
-            candidates: 候補者リスト
-            candidate_count: 候補者数
-
-        Returns:
-            str: 応答メッセージ
-        """
+    def _generate_response(self, requirements: Dict[str, Any], candidates: List[Dict[str, Any]], candidate_count: int) -> str:
+        """AIの応答メッセージを生成"""
         if candidate_count == 0:
             return (
                 "申し訳ございません。現在、ご指定の条件に完全に一致する候補者が見つかりませんでした。\n\n"
                 "条件を少し緩和していただくか、別の条件を追加していただけますか？"
             )
 
-        # 要件のサマリー
         requirements_summary = []
         if requirements.get("skills"):
             requirements_summary.append(f"スキル: {', '.join(requirements['skills'][:3])}")
