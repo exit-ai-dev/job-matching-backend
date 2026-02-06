@@ -172,26 +172,21 @@ class EmployerChatService:
         db = SessionLocal()
         
         try:
-            # 実際のテーブル構造
+            # 実際のテーブル構造（resumesテーブルは存在しない）
             # users: id, name, role, skills, experience_years
-            # resumes: user_id, skills, experience
             # user_preferences_profile: user_id, job_title, location_prefecture, location_city, remote_work_preference
             
             query = """
                 SELECT 
                     u.id,
                     u.name,
-                    r.skills as resume_skills,
                     u.skills as user_skills,
                     upp.job_title,
                     upp.location_prefecture,
                     upp.location_city,
                     upp.remote_work_preference,
-                    r.experience,
-                    u.experience_years,
-                    r.summary
+                    u.experience_years
                 FROM users u
-                LEFT JOIN resumes r ON u.id = r.user_id
                 LEFT JOIN user_preferences_profile upp ON u.id = upp.user_id
                 WHERE u.role = 'SEEKER'
                   AND u.is_active = true
@@ -199,13 +194,13 @@ class EmployerChatService:
 
             params = {}
 
-            # スキルフィルター
+            # スキルフィルター（usersテーブルのみ）
             if requirements.get("skills"):
                 skill_conditions = []
                 for i, skill in enumerate(requirements["skills"][:5]):
-                    # resumesテーブルとusersテーブルの両方からスキルを検索
+                    # usersテーブルのskillsカラムのみ検索
                     skill_conditions.append(
-                        f"(r.skills::text ILIKE %(skill_pattern_{i})s OR u.skills::text ILIKE %(skill_pattern_{i})s)"
+                        f"(u.skills IS NOT NULL AND u.skills::text ILIKE %(skill_pattern_{i})s)"
                     )
                     params[f"skill_pattern_{i}"] = f"%{skill}%"
                 
@@ -237,9 +232,9 @@ class EmployerChatService:
 
             for row in result:
                 try:
-                    # スキルの解析（resumeまたはuserから）
+                    # スキルの解析（usersテーブルのみ）
                     skills = []
-                    skills_source = getattr(row, 'resume_skills', None) or getattr(row, 'user_skills', None)
+                    skills_source = getattr(row, 'user_skills', None)
                     if skills_source:
                         try:
                             skills = json.loads(skills_source) if isinstance(skills_source, str) else skills_source
@@ -263,14 +258,6 @@ class EmployerChatService:
                                     experience_years = int(years_match.group(1))
                         except:
                             pass
-
-                    # experienceフィールドからも経験年数を取得を試みる
-                    if experience_years == 0:
-                        exp_field = getattr(row, 'experience', None)
-                        if exp_field:
-                            years_match = re.search(r'(\d+)\s*年', str(exp_field))
-                            if years_match:
-                                experience_years = int(years_match.group(1))
 
                     # 経験年数フィルター
                     if requirements.get("experience_years"):
