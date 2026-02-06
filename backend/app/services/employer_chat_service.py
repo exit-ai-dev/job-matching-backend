@@ -18,9 +18,9 @@ class EmployerChatService:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    def start_chat(self, employer_id: str) -> ChatTurnResult:
+    def start_chat(self, user_id: str) -> ChatTurnResult: 
         """候補者検索チャット開始"""
-        session = SessionManager.create_session(employer_id, {})
+        session = SessionManager.create_session(user_id, {})  
 
         initial_message = (
             "こんにちは！候補者検索をサポートします。\n\n"
@@ -51,7 +51,7 @@ class EmployerChatService:
 
     def process_message(
         self,
-        employer_id: str,
+        user_id: str,  
         user_message: str,
         session_id: Optional[str] = None
     ) -> ChatTurnResult:
@@ -60,13 +60,13 @@ class EmployerChatService:
             if session_id:
                 session = SessionManager.get_session(session_id)
                 if not session:
-                    return self.start_chat(employer_id)
+                    return self.start_chat(user_id)  
             else:
-                return self.start_chat(employer_id)
+                return self.start_chat(user_id)  
 
             print(f"\n{'='*60}")
             print(f"[EmployerChatService] Processing employer message")
-            print(f"   Employer ID: {employer_id}")
+            print(f"   Employer ID: {user_id}")  
             print(f"   Message: {user_message[:100]}...")
 
             # 1. AIで企業の要求を分析
