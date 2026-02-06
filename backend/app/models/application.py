@@ -20,6 +20,14 @@ class ApplicationStatus(str, enum.Enum):
     WITHDRAWN = "withdrawn"  # 辞退
 
 
+# SQLAlchemy EnumがEnum名("PENDING")ではなく値("pending")を保存するようにする
+_application_status_enum = Enum(
+    ApplicationStatus,
+    values_callable=lambda enum_cls: [e.value for e in enum_cls],
+    name="applicationstatus",
+)
+
+
 class Application(Base):
     """応募テーブル"""
     __tablename__ = "applications"
@@ -29,7 +37,7 @@ class Application(Base):
     job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
 
     # ステータス
-    status = Column(Enum(ApplicationStatus), default=ApplicationStatus.SCREENING, nullable=False)
+    status = Column(_application_status_enum, default=ApplicationStatus.SCREENING, nullable=False)
     status_detail = Column(String(100), nullable=True)  # 「一次面接待ち」など
     status_color = Column(String(20), default="yellow", nullable=True)  # UI表示用
 
