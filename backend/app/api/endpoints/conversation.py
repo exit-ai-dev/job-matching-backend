@@ -19,6 +19,7 @@ from app.core.dependencies import (
 from app.core.exceptions import OpenAIError, StorageError, NotFoundError
 from app.core.subscription import verify_subscription_limit
 from app.models.user import User
+from app.services.chat_service import ChatService 
 
 logger = logging.getLogger(__name__)
 
@@ -139,24 +140,30 @@ async def get_conversations(
         
         # 履歴がない場合、動的な初回メッセージを生成
         if not conversations or len(conversations) == 0:
-            # ChatServiceで初回メッセージを生成
-            chat_service = ChatService()
-            result = chat_service.start_chat(user_id=user_id)
-            
-            # 新規会話オブジェクトを作成
-            new_conversation = {
-                "id": result.session_id,
-                "conversation_id": result.session_id,
-                "messages": [{
-                    "role": "assistant",
-                    "content": result.ai_message,  # 動的メッセージ
-                    "turn": "1"
-                }],
-                "createdAt": datetime.now().isoformat(),
-                "updatedAt": datetime.now().isoformat()
-            }
-            
-            conversations = [new_conversation]
+            try:
+                # ChatServiceで初回メッセージを生成
+                chat_service = ChatService()
+                result = chat_service.start_chat(user_id=user_id)
+                
+                # 新規会話オブジェクトを作成
+                new_conversation = {
+                    "id": result.session_id,
+                    "conversation_id": result.session_id,
+                    "messages": [{
+                        "role": "assistant",
+                        "content": result.ai_message,  # 動的メッセージ
+                        "turn": "1"
+                    }],
+                    "createdAt": datetime.now().isoformat(),
+                    "updatedAt": datetime.now().isoformat()
+                }
+                
+                conversations = [new_conversation]
+                
+            except Exception as e:
+                logger.error(f"Error generating initial message: {e}")
+                # エラーの場合はフォールバック（空の配列を返す）
+                conversations = []
         
         return ConversationHistoryResponse(conversations=conversations)
 
