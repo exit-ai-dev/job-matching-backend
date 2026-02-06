@@ -88,7 +88,7 @@ def main():
     ap.add_argument("--reset", action="store_true", help="truncate tables before inserting")
     ap.add_argument("--seekers", type=int, default=10, help="number of seeker users")
     ap.add_argument("--employers", type=int, default=5, help="number of employer users")
-    ap.add_argument("--jobs", type=int, default=20, help="number of job postings")
+    ap.add_argument("--jobs", type=int, default=10000, help="number of job postings")
     args = ap.parse_args()
 
     random.seed(42)
