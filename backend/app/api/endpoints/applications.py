@@ -189,7 +189,7 @@ async def create_application(
         id=str(uuid.uuid4()),
         seeker_id=current_user.id,
         job_id=request.jobId,
-        status=ApplicationStatus.PENDING,
+        status=ApplicationStatus.PENDING.value,
         status_detail="書類選考中",
         status_color="yellow",
         message=request.message,
