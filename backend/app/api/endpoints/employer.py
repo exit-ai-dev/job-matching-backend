@@ -528,7 +528,7 @@ async def get_dashboard_stats(
         ).count()
         pending_applications = db.query(Application).filter(
             Application.job_id.in_(employer_job_ids),
-            Application.status == ApplicationStatus.PENDING
+            Application.status == ApplicationStatus.SCREENING
         ).count()
         interview_applications = db.query(Application).filter(
             Application.job_id.in_(employer_job_ids),

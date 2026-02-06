@@ -3,12 +3,15 @@
 課金・サブスクリプション管理エンドポイント
 """
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import logging
 import json
 
-from app.core.dependencies import get_db, get_current_user
+from app.core.dependencies import get_db, get_current_user, get_settings_dependency
+from app.core.config import Settings
+from jose import jwt, JWTError
 from app.models.user import User
 from app.models.subscription_plan import SubscriptionPlan
 from app.models.subscription import Subscription, SubscriptionStatus
@@ -19,6 +22,30 @@ from app.services.subscription_service import SubscriptionService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+optional_security = HTTPBearer(auto_error=False)
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db=Depends(get_db),
+    settings: Settings = Depends(get_settings_dependency),
+) -> Optional[User]:
+    """認証があればユーザーを返し、なければNoneを返す"""
+    if not credentials:
+        return None
+
+    try:
+        payload = jwt.decode(credentials.credentials, settings.secret_key, algorithms=[settings.algorithm])
+        user_id: str = payload.get("sub")
+        if not user_id:
+            return None
+    except JWTError:
+        return None
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        return None
+    return user
 
 
 # === リクエスト/レスポンスモデル ===
@@ -97,7 +124,7 @@ class LimitCheckResponse(BaseModel):
 
 @router.get("/plans", response_model=List[PlanResponse])
 async def get_plans(
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db=Depends(get_db)
 ):
     """
@@ -107,7 +134,12 @@ async def get_plans(
     """
     try:
         service = SubscriptionService(db)
-        plans = service.get_plans_for_role(current_user.role)
+        if current_user:
+            plans = service.get_plans_for_role(current_user.role)
+        else:
+            plans = db.query(SubscriptionPlan).filter(
+                SubscriptionPlan.is_active == True
+            ).order_by(SubscriptionPlan.display_order).all()
 
         return [
             PlanResponse(

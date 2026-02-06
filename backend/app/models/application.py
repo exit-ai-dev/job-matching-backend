@@ -11,11 +11,9 @@ from app.db.base import Base
 
 class ApplicationStatus(str, enum.Enum):
     """応募ステータス"""
-    PENDING = "PENDING"  # 応募受付中
     SCREENING = "SCREENING"  # 書類選考中
     INTERVIEW = "INTERVIEW"  # 面接予定・面接中
     OFFERED = "OFFERED"  # 内定
-    ACCEPTED = "ACCEPTED"  # 内定承諾
     REJECTED = "REJECTED"  # 不合格
     WITHDRAWN = "WITHDRAWN"  # 辞退
 
