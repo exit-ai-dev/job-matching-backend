@@ -184,7 +184,7 @@ class EmployerChatService:
                     u.experience_years
                 FROM users u
                 LEFT JOIN user_preferences_profile upp ON u.id = upp.user_id
-                WHERE u.role = 'SEEKER'
+                WHERE lower(u.role::text) = 'seeker'
                   AND u.is_active = true
             """
 
@@ -205,7 +205,7 @@ class EmployerChatService:
                 skill_conditions = []
                 for i, keyword in enumerate(search_keywords[:5]):
                     skill_conditions.append(
-                        f"(u.skills::text ILIKE %(keyword_{i})s OR upp.job_title::text ILIKE %(keyword_{i})s)"
+                        f"(u.skills::text ILIKE :keyword_{i} OR upp.job_title::text ILIKE :keyword_{i})"
                     )
                     params[f"keyword_{i}"] = f"%{keyword}%"
                 
@@ -215,7 +215,7 @@ class EmployerChatService:
             # 2. 勤務地で検索（該当すればOK）
             if requirements.get("location"):
                 or_conditions.append(
-                    "(upp.location_prefecture ILIKE %(location)s OR upp.location_city ILIKE %(location)s)"
+                    "(upp.location_prefecture ILIKE :location OR upp.location_city ILIKE :location)"
                 )
                 params["location"] = f"%{requirements['location']}%"
 
