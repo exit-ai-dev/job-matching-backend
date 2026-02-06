@@ -1,6 +1,6 @@
 """
-企業向け候補者検索チャットサービス（DB構造修正版）
-実際のDBスキーマ: users, resumes, user_preferences_profile
+企業向け候補者検索チャットサービス（OR検索版）
+職種、スキル、勤務地のいずれかに該当すれば表示
 """
 
 from typing import Optional, List, Dict, Any
@@ -51,7 +51,7 @@ class EmployerChatService:
 
     def process_message(
         self,
-        user_id: str,  
+        user_id: str,
         user_message: str,
         session_id: Optional[str] = None
     ) -> ChatTurnResult:
@@ -60,17 +60,18 @@ class EmployerChatService:
             if session_id:
                 session = SessionManager.get_session(session_id)
                 if not session:
-                    return self.start_chat(user_id)  
+                    return self.start_chat(user_id)
             else:
-                return self.start_chat(user_id)  
+                return self.start_chat(user_id)
 
             print(f"\n{'='*60}")
             print(f"[EmployerChatService] Processing employer message")
-            print(f"   Employer ID: {user_id}")  
+            print(f"   Employer ID: {user_id}")
             print(f"   Message: {user_message[:100]}...")
 
             # 1. AIで企業の要求を分析
             requirements = self._extract_requirements(user_message, session)
+            print(f"[EmployerChatService] Extracted requirements: {requirements}")
 
             # 2. 候補者を検索
             candidates = self._search_candidates(requirements)
@@ -99,7 +100,6 @@ class EmployerChatService:
             print(f"[EmployerChatService] ERROR in process_message: {e}")
             import traceback
             traceback.print_exc()
-            # エラー時も応答を返す（500エラー回避）
             return ChatTurnResult(
                 ai_message="申し訳ございません。エラーが発生しました。もう一度お試しください。",
                 current_score=0.0,
@@ -149,7 +149,6 @@ class EmployerChatService:
                 content = content.split("```")[1].split("```")[0].strip()
 
             requirements = json.loads(content)
-            print(f"[EmployerChatService] Extracted requirements: {requirements}")
             return requirements
 
         except Exception as e:
@@ -165,17 +164,14 @@ class EmployerChatService:
             }
 
     def _search_candidates(self, requirements: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """要件に基づいて候補者を検索（実際のDBスキーマ対応）"""
+        """要件に基づいて候補者を検索（OR検索版）"""
         from app.db.session import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         
         try:
-            # 実際のテーブル構造（resumesテーブルは存在しない）
-            # users: id, name, role, skills, experience_years
-            # user_preferences_profile: user_id, job_title, location_prefecture, location_city, remote_work_preference
-            
+            # 基本クエリ
             query = """
                 SELECT 
                     u.id,
@@ -193,46 +189,61 @@ class EmployerChatService:
             """
 
             params = {}
+            or_conditions = []  # ← OR条件を格納
 
-            # スキルフィルター（usersテーブルのみ）
-            if requirements.get("skills"):
+            # 1. スキルまたは職種で検索（どちらか該当すればOK）
+            search_keywords = []
+            
+            if requirements.get("skills") and len(requirements["skills"]) > 0:
+                search_keywords.extend(requirements["skills"][:3])
+            
+            if requirements.get("job_title"):
+                search_keywords.append(requirements["job_title"])
+            
+            # スキル・職種のOR検索
+            if search_keywords:
                 skill_conditions = []
-                for i, skill in enumerate(requirements["skills"][:5]):
-                    # usersテーブルのskillsカラムのみ検索
+                for i, keyword in enumerate(search_keywords[:5]):
                     skill_conditions.append(
-                        f"(u.skills IS NOT NULL AND u.skills::text ILIKE %(skill_pattern_{i})s)"
+                        f"(u.skills::text ILIKE %(keyword_{i})s OR upp.job_title::text ILIKE %(keyword_{i})s)"
                     )
-                    params[f"skill_pattern_{i}"] = f"%{skill}%"
+                    params[f"keyword_{i}"] = f"%{keyword}%"
                 
                 if skill_conditions:
-                    query += f" AND ({' OR '.join(skill_conditions)})"
+                    or_conditions.append(f"({' OR '.join(skill_conditions)})")
 
-            # 職種フィルター
-            if requirements.get("job_title"):
-                query += " AND upp.job_title ILIKE %(job_title)s"
-                params["job_title"] = f"%{requirements['job_title']}%"
+            # 2. 勤務地で検索（該当すればOK）
+            if requirements.get("location"):
+                or_conditions.append(
+                    "(upp.location_prefecture ILIKE %(location)s OR upp.location_city ILIKE %(location)s)"
+                )
+                params["location"] = f"%{requirements['location']}%"
 
-            # リモートワークフィルター
+            # 3. リモートワークで検索（該当すればOK）
             if requirements.get("remote_preference"):
                 remote_pref = requirements["remote_preference"].lower()
                 if "リモート" in remote_pref or "在宅" in remote_pref or "remote" in remote_pref:
-                    query += " AND upp.remote_work_preference IN ('フルリモート', 'リモート可')"
+                    or_conditions.append(
+                        "upp.remote_work_preference IN ('フルリモート', 'リモート可')"
+                    )
 
-            # 勤務地フィルター
-            if requirements.get("location"):
-                query += " AND (upp.location_prefecture ILIKE %(location)s OR upp.location_city ILIKE %(location)s)"
-                params["location"] = f"%{requirements['location']}%"
-
+            # OR条件を結合（いずれか1つでも該当すればOK）
+            if or_conditions:
+                query += f" AND ({' OR '.join(or_conditions)})"
+            
             query += " LIMIT 20"
 
-            print(f"[EmployerChatService] Executing query with params: {params}")
+            print(f"[EmployerChatService] Search keywords: {search_keywords}")
+            print(f"[EmployerChatService] OR conditions count: {len(or_conditions)}")
+            print(f"[EmployerChatService] Query params: {params}")
+            print(f"[EmployerChatService] Full query:\n{query}")
             
             result = db.execute(text(query), params)
             candidates = []
 
             for row in result:
                 try:
-                    # スキルの解析（usersテーブルのみ）
+                    # スキルの解析
                     skills = []
                     skills_source = getattr(row, 'user_skills', None)
                     if skills_source:
@@ -252,17 +263,16 @@ class EmployerChatService:
                             if exp_str.isdigit():
                                 experience_years = int(exp_str)
                             else:
-                                # "3年" のような形式から数値を抽出
                                 years_match = re.search(r'(\d+)', exp_str)
                                 if years_match:
                                     experience_years = int(years_match.group(1))
                         except:
                             pass
 
-                    # 経験年数フィルター
+                    # 経験年数フィルター（これはANDで適用）
                     if requirements.get("experience_years"):
-                        if experience_years < requirements["experience_years"]:
-                            continue
+                        if experience_years > 0 and experience_years < requirements["experience_years"]:
+                            continue  # 経験年数が足りない場合はスキップ
 
                     # マッチスコア計算
                     match_score = self._calculate_match_score(
@@ -270,7 +280,9 @@ class EmployerChatService:
                             "skills": skills,
                             "job_title": getattr(row, 'job_title', None),
                             "experience_years": experience_years,
-                            "remote_work_preference": getattr(row, 'remote_work_preference', None)
+                            "remote_work_preference": getattr(row, 'remote_work_preference', None),
+                            "location_prefecture": getattr(row, 'location_prefecture', None),
+                            "location_city": getattr(row, 'location_city', None)
                         },
                         requirements
                     )
@@ -296,12 +308,15 @@ class EmployerChatService:
                             {
                                 "skills": skills,
                                 "job_title": getattr(row, 'job_title', None),
-                                "experience_years": experience_years
+                                "experience_years": experience_years,
+                                "location_prefecture": getattr(row, 'location_prefecture', None),
+                                "location_city": getattr(row, 'location_city', None)
                             },
                             requirements
                         )
                     }
                     candidates.append(candidate)
+                    
                 except Exception as row_error:
                     print(f"[EmployerChatService] Error processing row: {row_error}")
                     continue
@@ -312,7 +327,7 @@ class EmployerChatService:
             return candidates[:10]
 
         except Exception as e:
-            print(f"[EmployerChatService] Error searching candidates: {e}")
+            print(f"[EmployerChatService] Error in _search_candidates: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -321,78 +336,115 @@ class EmployerChatService:
 
     def _calculate_match_score(self, candidate: Dict[str, Any], requirements: Dict[str, Any]) -> int:
         """候補者のマッチスコアを計算"""
-        score = 60  # ベーススコア
-
-        # スキルマッチ
-        if requirements.get("skills") and candidate.get("skills"):
-            required_skills = set(s.lower() for s in requirements["skills"])
-            candidate_skills = set(s.lower() for s in candidate["skills"])
-            matched_skills = required_skills & candidate_skills
+        try:
+            score = 50  # ベーススコア（少し下げる）
             
-            if matched_skills:
-                score += min(len(matched_skills) * 10, 30)
+            # スキルマッチ（最大30点）
+            if requirements.get("skills") and candidate.get("skills"):
+                required_skills = set(s.lower() for s in requirements["skills"])
+                candidate_skills = set(s.lower() for s in candidate["skills"])
+                matched_skills = required_skills & candidate_skills
+                
+                if matched_skills:
+                    score += min(len(matched_skills) * 10, 30)
 
-        # 経験年数マッチ
-        if requirements.get("experience_years") and candidate.get("experience_years"):
-            if candidate["experience_years"] >= requirements["experience_years"]:
-                score += 10
+            # 職種マッチ（20点）
+            if requirements.get("job_title") and candidate.get("job_title"):
+                if requirements["job_title"].lower() in candidate["job_title"].lower():
+                    score += 20
 
-        # 職種マッチ
-        if requirements.get("job_title") and candidate.get("job_title"):
-            if requirements["job_title"].lower() in candidate["job_title"].lower():
-                score += 15
+            # 経験年数マッチ（15点）
+            if requirements.get("experience_years") and candidate.get("experience_years"):
+                if candidate["experience_years"] >= requirements["experience_years"]:
+                    score += 15
 
-        return min(score, 100)
+            # 勤務地マッチ（10点）
+            if requirements.get("location"):
+                location = requirements["location"].lower()
+                cand_pref = (candidate.get("location_prefecture") or "").lower()
+                cand_city = (candidate.get("location_city") or "").lower()
+                if location in cand_pref or location in cand_city:
+                    score += 10
+
+            # リモートマッチ（10点）
+            if requirements.get("remote_preference"):
+                remote_pref = requirements["remote_preference"].lower()
+                cand_remote = (candidate.get("remote_work_preference") or "").lower()
+                if ("リモート" in remote_pref or "remote" in remote_pref) and "リモート" in cand_remote:
+                    score += 10
+
+            return min(score, 100)
+        except Exception as e:
+            print(f"[EmployerChatService] Error calculating score: {e}")
+            return 50
 
     def _generate_match_reasoning(self, candidate: Dict[str, Any], requirements: Dict[str, Any]) -> str:
         """マッチング理由を生成"""
-        reasons = []
+        try:
+            reasons = []
 
-        # スキルマッチ
-        if requirements.get("skills") and candidate.get("skills"):
-            required_skills = set(s.lower() for s in requirements["skills"])
-            candidate_skills = set(s.lower() for s in candidate["skills"])
-            matched_skills = required_skills & candidate_skills
-            
-            if matched_skills:
-                reasons.append(f"スキル一致: {', '.join(list(matched_skills)[:3])}")
+            # スキルマッチ
+            if requirements.get("skills") and candidate.get("skills"):
+                required_skills = set(s.lower() for s in requirements["skills"])
+                candidate_skills = set(s.lower() for s in candidate["skills"])
+                matched_skills = required_skills & candidate_skills
+                
+                if matched_skills:
+                    reasons.append(f"スキル一致: {', '.join(list(matched_skills)[:3])}")
 
-        # 経験年数
-        if requirements.get("experience_years") and candidate.get("experience_years"):
-            if candidate["experience_years"] >= requirements["experience_years"]:
-                reasons.append(f"経験年数: {candidate['experience_years']}年")
+            # 職種マッチ
+            if requirements.get("job_title") and candidate.get("job_title"):
+                if requirements["job_title"].lower() in candidate["job_title"].lower():
+                    reasons.append("職種一致")
 
-        # 職種
-        if requirements.get("job_title") and candidate.get("job_title"):
-            if requirements["job_title"].lower() in candidate["job_title"].lower():
-                reasons.append("職種一致")
+            # 経験年数
+            if requirements.get("experience_years") and candidate.get("experience_years"):
+                if candidate["experience_years"] >= requirements["experience_years"]:
+                    reasons.append(f"経験年数: {candidate['experience_years']}年")
 
-        return " / ".join(reasons) if reasons else "候補者として推薦"
+            # 勤務地
+            if requirements.get("location"):
+                location = requirements["location"].lower()
+                cand_pref = (candidate.get("location_prefecture") or "").lower()
+                cand_city = (candidate.get("location_city") or "").lower()
+                if location in cand_pref or location in cand_city:
+                    reasons.append("勤務地一致")
+
+            return " / ".join(reasons) if reasons else "候補者として推薦"
+        except Exception as e:
+            print(f"[EmployerChatService] Error generating reasoning: {e}")
+            return "候補者として推薦"
 
     def _generate_response(self, requirements: Dict[str, Any], candidates: List[Dict[str, Any]], candidate_count: int) -> str:
         """AIの応答メッセージを生成"""
-        if candidate_count == 0:
-            return (
-                "申し訳ございません。現在、ご指定の条件に完全に一致する候補者が見つかりませんでした。\n\n"
-                "条件を少し緩和していただくか、別の条件を追加していただけますか？"
+        try:
+            if candidate_count == 0:
+                return (
+                    "申し訳ございません。現在、ご指定の条件に完全に一致する候補者が見つかりませんでした。\n\n"
+                    "条件を少し緩和していただくか、別の条件を追加していただけますか？"
+                )
+
+            requirements_summary = []
+            if requirements.get("skills"):
+                requirements_summary.append(f"スキル: {', '.join(requirements['skills'][:3])}")
+            if requirements.get("experience_years"):
+                requirements_summary.append(f"経験: {requirements['experience_years']}年以上")
+            if requirements.get("job_title"):
+                requirements_summary.append(f"職種: {requirements['job_title']}")
+            if requirements.get("location"):
+                requirements_summary.append(f"勤務地: {requirements['location']}")
+
+            message = f"以下の条件で{candidate_count}名の候補者が見つかりました：\n"
+            if requirements_summary:
+                message += "• " + "\n• ".join(requirements_summary) + "\n\n"
+
+            message += (
+                f"マッチスコアの高い順に{min(candidate_count, 10)}名を表示しています。\n"
+                "各候補者の詳細を確認して、スカウトメッセージを送信することができます。\n\n"
+                "さらに条件を絞り込みたい場合は、追加の要件をお聞かせください。"
             )
 
-        requirements_summary = []
-        if requirements.get("skills"):
-            requirements_summary.append(f"スキル: {', '.join(requirements['skills'][:3])}")
-        if requirements.get("experience_years"):
-            requirements_summary.append(f"経験: {requirements['experience_years']}年以上")
-        if requirements.get("job_title"):
-            requirements_summary.append(f"職種: {requirements['job_title']}")
-
-        message = f"以下の条件で{candidate_count}名の候補者が見つかりました：\n"
-        if requirements_summary:
-            message += "• " + "\n• ".join(requirements_summary) + "\n\n"
-
-        message += (
-            f"マッチスコアの高い順に{min(candidate_count, 10)}名を表示しています。\n"
-            "各候補者の詳細を確認して、スカウトメッセージを送信することができます。\n\n"
-            "さらに条件を絞り込みたい場合は、追加の要件をお聞かせください。"
-        )
-
-        return message
+            return message
+        except Exception as e:
+            print(f"[EmployerChatService] Error generating response: {e}")
+            return "候補者を検索しました。"
