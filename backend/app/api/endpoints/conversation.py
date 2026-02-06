@@ -127,18 +127,39 @@ async def chat(
 @router.get("/conversations/{user_id}", response_model=ConversationHistoryResponse)
 async def get_conversations(
     user_id: str,
-    storage: ConversationStorageDep
+    storage: ConversationStorageDep,
+    db=Depends(get_db)
 ):
     """
     ユーザーの会話履歴を取得
+    履歴がない場合は動的な初回メッセージを含む新規会話を作成
     """
     try:
         conversations = storage.get_user_conversations(user_id)
+        
+        # 履歴がない場合、動的な初回メッセージを生成
+        if not conversations or len(conversations) == 0:
+            # ChatServiceで初回メッセージを生成
+            chat_service = ChatService()
+            result = chat_service.start_chat(user_id=user_id)
+            
+            # 新規会話オブジェクトを作成
+            new_conversation = {
+                "id": result.session_id,
+                "conversation_id": result.session_id,
+                "messages": [{
+                    "role": "assistant",
+                    "content": result.ai_message,  # 動的メッセージ
+                    "turn": "1"
+                }],
+                "createdAt": datetime.now().isoformat(),
+                "updatedAt": datetime.now().isoformat()
+            }
+            
+            conversations = [new_conversation]
+        
         return ConversationHistoryResponse(conversations=conversations)
 
-    except StorageError as e:
-        logger.error(f"Storage error getting conversations: {e}")
-        raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
         logger.error(f"Error getting conversations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
