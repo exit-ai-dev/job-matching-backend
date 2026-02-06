@@ -56,44 +56,58 @@ class EmployerChatService:
         session_id: Optional[str] = None
     ) -> ChatTurnResult:
         """企業のメッセージを処理して候補者を検索"""
-        if session_id:
-            session = SessionManager.get_session(session_id)
-            if not session:
+        try:
+            if session_id:
+                session = SessionManager.get_session(session_id)
+                if not session:
+                    return self.start_chat(employer_id)
+            else:
                 return self.start_chat(employer_id)
-        else:
-            return self.start_chat(employer_id)
 
-        print(f"\n{'='*60}")
-        print(f"[EmployerChatService] Processing employer message")
-        print(f"   Employer ID: {employer_id}")
-        print(f"   Message: {user_message[:100]}...")
+            print(f"\n{'='*60}")
+            print(f"[EmployerChatService] Processing employer message")
+            print(f"   Employer ID: {employer_id}")
+            print(f"   Message: {user_message[:100]}...")
 
-        # 1. AIで企業の要求を分析
-        requirements = self._extract_requirements(user_message, session)
+            # 1. AIで企業の要求を分析
+            requirements = self._extract_requirements(user_message, session)
 
-        # 2. 候補者を検索
-        candidates = self._search_candidates(requirements)
+            # 2. 候補者を検索
+            candidates = self._search_candidates(requirements)
 
-        # 3. AIで応答メッセージを生成
-        ai_message = self._generate_response(requirements, candidates, len(candidates))
+            # 3. AIで応答メッセージを生成
+            ai_message = self._generate_response(requirements, candidates, len(candidates))
 
-        # 4. セッションに記録
-        SessionManager.add_turn(
-            session=session,
-            user_message=user_message,
-            ai_message=ai_message,
-            is_deep_dive=False,
-            new_score=0.0
-        )
+            # 4. セッションに記録
+            SessionManager.add_turn(
+                session=session,
+                user_message=user_message,
+                ai_message=ai_message,
+                is_deep_dive=False,
+                new_score=0.0
+            )
 
-        return ChatTurnResult(
-            ai_message=ai_message,
-            current_score=0.0,
-            turn_count=session.turn_count,
-            should_show_jobs=len(candidates) > 0,
-            jobs=candidates,
-            session_id=session.session_id
-        )
+            return ChatTurnResult(
+                ai_message=ai_message,
+                current_score=0.0,
+                turn_count=session.turn_count,
+                should_show_jobs=len(candidates) > 0,
+                jobs=candidates,
+                session_id=session.session_id
+            )
+        except Exception as e:
+            print(f"[EmployerChatService] ERROR in process_message: {e}")
+            import traceback
+            traceback.print_exc()
+            # エラー時も応答を返す（500エラー回避）
+            return ChatTurnResult(
+                ai_message="申し訳ございません。エラーが発生しました。もう一度お試しください。",
+                current_score=0.0,
+                turn_count=1,
+                should_show_jobs=False,
+                jobs=[],
+                session_id=session_id or "error"
+            )
 
     def _extract_requirements(self, user_message: str, session) -> Dict[str, Any]:
         """企業のメッセージから求める候補者の要件を抽出"""
@@ -222,81 +236,88 @@ class EmployerChatService:
             candidates = []
 
             for row in result:
-                # スキルの解析（resumeまたはuserから）
-                skills = []
-                skills_source = row.resume_skills or row.user_skills
-                if skills_source:
-                    try:
-                        skills = json.loads(skills_source) if isinstance(skills_source, str) else skills_source
-                        if not isinstance(skills, list):
-                            skills = [str(skills_source)]
-                    except:
-                        skills = [s.strip() for s in str(skills_source).split(',') if s.strip()]
+                try:
+                    # スキルの解析（resumeまたはuserから）
+                    skills = []
+                    skills_source = getattr(row, 'resume_skills', None) or getattr(row, 'user_skills', None)
+                    if skills_source:
+                        try:
+                            skills = json.loads(skills_source) if isinstance(skills_source, str) else skills_source
+                            if not isinstance(skills, list):
+                                skills = [str(skills_source)]
+                        except:
+                            skills = [s.strip() for s in str(skills_source).split(',') if s.strip()]
 
-                # 経験年数の推定
-                experience_years = 0
-                if row.experience_years:
-                    try:
-                        exp_str = str(row.experience_years)
-                        if exp_str.isdigit():
-                            experience_years = int(exp_str)
-                        else:
-                            # "3年" のような形式から数値を抽出
-                            years_match = re.search(r'(\d+)', exp_str)
+                    # 経験年数の推定
+                    experience_years = 0
+                    exp_years_field = getattr(row, 'experience_years', None)
+                    if exp_years_field:
+                        try:
+                            exp_str = str(exp_years_field)
+                            if exp_str.isdigit():
+                                experience_years = int(exp_str)
+                            else:
+                                # "3年" のような形式から数値を抽出
+                                years_match = re.search(r'(\d+)', exp_str)
+                                if years_match:
+                                    experience_years = int(years_match.group(1))
+                        except:
+                            pass
+
+                    # experienceフィールドからも経験年数を取得を試みる
+                    if experience_years == 0:
+                        exp_field = getattr(row, 'experience', None)
+                        if exp_field:
+                            years_match = re.search(r'(\d+)\s*年', str(exp_field))
                             if years_match:
                                 experience_years = int(years_match.group(1))
-                    except:
-                        pass
 
-                # experienceフィールドからも経験年数を取得を試みる
-                if experience_years == 0 and row.experience:
-                    years_match = re.search(r'(\d+)\s*年', str(row.experience))
-                    if years_match:
-                        experience_years = int(years_match.group(1))
+                    # 経験年数フィルター
+                    if requirements.get("experience_years"):
+                        if experience_years < requirements["experience_years"]:
+                            continue
 
-                # 経験年数フィルター
-                if requirements.get("experience_years"):
-                    if experience_years < requirements["experience_years"]:
-                        continue
-
-                # マッチスコア計算
-                match_score = self._calculate_match_score(
-                    {
-                        "skills": skills,
-                        "job_title": row.job_title,
-                        "experience_years": experience_years,
-                        "remote_work_preference": row.remote_work_preference
-                    },
-                    requirements
-                )
-
-                # 勤務地
-                location_parts = []
-                if row.location_prefecture:
-                    location_parts.append(row.location_prefecture)
-                if row.location_city:
-                    location_parts.append(row.location_city)
-                location = "".join(location_parts) if location_parts else "未設定"
-
-                candidate = {
-                    "id": str(row.id),
-                    "name": row.name or "名前未設定",
-                    "job_title": row.job_title or "職種未設定",
-                    "experience_years": experience_years,
-                    "skills": skills,
-                    "location": location,
-                    "remote_option": row.remote_work_preference or "未設定",
-                    "matchScore": match_score,
-                    "matchReasoning": self._generate_match_reasoning(
+                    # マッチスコア計算
+                    match_score = self._calculate_match_score(
                         {
                             "skills": skills,
-                            "job_title": row.job_title,
-                            "experience_years": experience_years
+                            "job_title": getattr(row, 'job_title', None),
+                            "experience_years": experience_years,
+                            "remote_work_preference": getattr(row, 'remote_work_preference', None)
                         },
                         requirements
                     )
-                }
-                candidates.append(candidate)
+
+                    # 勤務地
+                    location_parts = []
+                    if getattr(row, 'location_prefecture', None):
+                        location_parts.append(row.location_prefecture)
+                    if getattr(row, 'location_city', None):
+                        location_parts.append(row.location_city)
+                    location = "".join(location_parts) if location_parts else "未設定"
+
+                    candidate = {
+                        "id": str(getattr(row, 'id', 'unknown')),
+                        "name": getattr(row, 'name', None) or "名前未設定",
+                        "job_title": getattr(row, 'job_title', None) or "職種未設定",
+                        "experience_years": experience_years,
+                        "skills": skills,
+                        "location": location,
+                        "remote_option": getattr(row, 'remote_work_preference', None) or "未設定",
+                        "matchScore": match_score,
+                        "matchReasoning": self._generate_match_reasoning(
+                            {
+                                "skills": skills,
+                                "job_title": getattr(row, 'job_title', None),
+                                "experience_years": experience_years
+                            },
+                            requirements
+                        )
+                    }
+                    candidates.append(candidate)
+                except Exception as row_error:
+                    print(f"[EmployerChatService] Error processing row: {row_error}")
+                    continue
 
             candidates.sort(key=lambda x: x["matchScore"], reverse=True)
             
