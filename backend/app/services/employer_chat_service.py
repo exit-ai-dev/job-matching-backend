@@ -76,6 +76,22 @@ class EmployerChatService:
             # 2. 候補者を検索
             candidates = self._search_candidates(requirements)
 
+            # ChatTurnResultのスキーマに合わせて変換
+            jobs = [
+                {
+                    "job_id": c.get("id", ""),
+                    "job_title": c.get("job_title", "職種未設定"),
+                    "company_name": c.get("name", "名前未設定"),
+                    "match_score": float(c.get("matchScore", 0)),
+                    "match_reasoning": c.get("matchReasoning", ""),
+                    "salary_min": None,
+                    "salary_max": None,
+                    "location": c.get("location", "未設定"),
+                    "remote_option": c.get("remote_option", "未設定"),
+                }
+                for c in candidates
+            ]
+
             # 3. AIで応答メッセージを生成
             ai_message = self._generate_response(requirements, candidates, len(candidates))
 
@@ -92,8 +108,8 @@ class EmployerChatService:
                 ai_message=ai_message,
                 current_score=0.0,
                 turn_count=session.turn_count,
-                should_show_jobs=len(candidates) > 0,
-                jobs=candidates,
+                should_show_jobs=len(jobs) > 0,
+                jobs=jobs,
                 session_id=session.session_id
             )
         except Exception as e:
