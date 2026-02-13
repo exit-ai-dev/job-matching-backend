@@ -50,6 +50,13 @@ class QuestionGenerator:
                 temperature=0.7,
                 max_tokens=200
             )
+
+            usage = getattr(response, "usage", None)
+            if usage:
+                print(
+                    f"📊 [token] question_generator "
+                    f"prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens}"
+                )
             
             question_text = response.choices[0].message.content.strip()
             
