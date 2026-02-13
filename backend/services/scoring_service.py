@@ -41,6 +41,13 @@ class ScoringService:
                 temperature=0.3,
                 max_tokens=300
             )
+
+            usage = getattr(response, "usage", None)
+            if usage:
+                print(
+                    f"📊 [token] scoring_service "
+                    f"prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens}"
+                )
             
             result_text = response.choices[0].message.content.strip()
             
