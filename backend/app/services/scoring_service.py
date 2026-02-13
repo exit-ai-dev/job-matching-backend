@@ -43,6 +43,16 @@ class ScoringService:
                 max_tokens=300
             )
 
+            usage = getattr(response, "usage", None)
+            print(f"📊 [token] scoring_service usage={usage}")
+            if usage:
+                print(
+                    f"📊 [token] scoring_service "
+                    f"prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens}"
+                )
+            else:
+                print("📊 [token] scoring_service usage=None")
+
             result_text = response.choices[0].message.content.strip()
 
             # スコアを抽出
