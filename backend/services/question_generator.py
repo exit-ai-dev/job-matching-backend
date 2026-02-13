@@ -52,12 +52,15 @@ class QuestionGenerator:
             )
 
             usage = getattr(response, "usage", None)
+            print(f"📊 [token] question_generator usage={usage}")
             if usage:
                 print(
                     f"📊 [token] question_generator "
                     f"prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens}"
                 )
-            print("🔥 scoring_service.py called 🔥")
+            else:
+                print("📊 [token] question_generator usage=None")
+            print("🔥 question_generator.py called 🔥")
             
             question_text = response.choices[0].message.content.strip()
             
