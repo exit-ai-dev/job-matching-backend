@@ -48,6 +48,7 @@ class ScoringService:
                     f"📊 [token] scoring_service "
                     f"prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens}"
                 )
+            print("🔥 scoring_service.py called 🔥")
             
             result_text = response.choices[0].message.content.strip()
             
